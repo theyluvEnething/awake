@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 import SwiftUI
 
@@ -21,33 +22,27 @@ struct SettingsView: View {
     var body: some View {
         let s = model.snapshot
         let d = s.decision
-        Form {
-            Section {
+        VStack(alignment: .leading, spacing: 24) {
+            Panel {
                 Toggle(isOn: Binding(get: { d.mode != .off }, set: setAwake)) {
-                    Text(Format.mode(.auto))
-                    Text(Format.sentence(Format.explain(.auto)))
+                    Row(Format.mode(.auto), detail: Format.sentence(Format.explain(.auto)))
                 }
                 Toggle(isOn: Binding(get: { d.mode == .on }, set: setIndefinitely)) {
-                    Text(Format.mode(.on))
-                    Text(Format.sentence(Format.explain(.on)))
+                    Row(Format.mode(.on), detail: Format.sentence(Format.explain(.on)))
                 }
             }
 
-            Section("Now") {
-                LabeledContent {
-                    Text(Format.lidSleep(s.flag))
-                } label: {
-                    Text("Lid sleep")
-                    Text(Format.sentence(Format.lidEffect(s.flag)))
-                }
+            Panel("Now") {
+                Row("Lid sleep", detail: Format.sentence(Format.lidEffect(s.flag)), value: Format.lidSleep(s.flag))
                 ForEach(d.holds, id: \.name) { hold in
-                    Text(Format.hold(hold, now: s.inputs.now))
+                    Row(Format.hold(hold, now: s.inputs.now))
                 }
                 if let pause = d.pause {
-                    LabeledContent("Paused", value: Format.capitalized(Format.pause(pause)))
+                    Row("Paused", value: Format.capitalized(Format.pause(pause)))
                 }
                 if let error = s.status?.error {
                     Label(Format.capitalized(error), systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.orange)
                 }
                 if s.flag {
@@ -55,24 +50,143 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
+            Panel(note: Format.guards) {
                 if let b = s.inputs.battery {
-                    LabeledContent("Battery", value: Format.battery(b))
+                    Row("Battery", value: Format.battery(b))
                 }
-                LabeledContent("Thermal state", value: Format.thermal(s.inputs.thermal))
-                LabeledContent("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
-            } footer: {
-                Text(Format.guards)
+                Row("Thermal state", value: Format.thermal(s.inputs.thermal))
+                Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
             }
         }
-        .formStyle(.grouped)
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 24)
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
+        .background(Color(nsColor: Palette.canvas))
+        .toggleStyle(TrailingSwitch())
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 model.snapshot = Snapshot.take()
             }
+        }
+    }
+}
+
+/// The window's colours: the system's light look, and in dark mode AdBlock's black canvas with flat
+/// panels and hairlines.
+@MainActor
+enum Palette {
+    /// Also the window's background, so the title bar shows it.
+    static let canvas = dynamic(light: .white, dark: .black)
+    static let card = Color(nsColor: dynamic(light: gray(0.973), dark: rgb(0.110, 0.110, 0.118)))
+    static let line = Color(nsColor: dynamic(light: gray(0.937), dark: rgb(0.173, 0.173, 0.184)))
+    static let ink = Color(nsColor: dynamic(light: .labelColor, dark: rgb(0.929, 0.933, 0.941)))
+    static let secondaryInk = Color(nsColor: dynamic(light: .secondaryLabelColor, dark: rgb(0.604, 0.616, 0.643)))
+
+    private static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
+        NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light }
+    }
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> NSColor {
+        NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+    }
+
+    private static func gray(_ w: Double) -> NSColor { rgb(w, w, w) }
+}
+
+/// Rows on a flat surface with a hairline border and hairlines between them, with an optional label
+/// above and note below.
+private struct Panel<Content: View>: View {
+    let label: String?
+    let note: String?
+    @ViewBuilder let content: Content
+
+    init(_ label: String? = nil, note: String? = nil, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.note = note
+        self.content = content()
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        VStack(alignment: .leading, spacing: 8) {
+            if let label {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.secondaryInk)
+                    .padding(.horizontal, 2)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Group(subviews: content) { rows in
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id {
+                            Palette.line.frame(height: 1)
+                        }
+                        row.padding(.horizontal, 14).padding(.vertical, 10)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.card, in: shape)
+            .overlay { shape.strokeBorder(Palette.line, lineWidth: 1) }
+            if let note {
+                Text(note)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 2)
+            }
+        }
+    }
+}
+
+/// A title with an optional detail under it and an optional value at the trailing edge.
+private struct Row: View {
+    let title: String
+    var detail: String? = nil
+    var value: String? = nil
+
+    init(_ title: String, detail: String? = nil, value: String? = nil) {
+        self.title = title
+        self.detail = detail
+        self.value = value
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.secondaryInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let value {
+                Text(value).font(.system(size: 13)).foregroundStyle(Palette.secondaryInk).fixedSize()
+            }
+        }
+    }
+}
+
+/// Mac switches hug their labels; these sit at the row's trailing edge, as in AdBlock.
+private struct TrailingSwitch: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 16) {
+            configuration.label
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityHidden(true)
+            Toggle(configuration)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .accessibilityRepresentation {
+            Toggle(configuration).toggleStyle(.switch)
         }
     }
 }

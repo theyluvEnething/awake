@@ -127,6 +127,9 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Awake"
             window.styleMask = [.titled, .closable]
+            // The title bar shows the canvas, so the window is one surface as in AdBlock.
+            window.titlebarAppearsTransparent = true
+            window.backgroundColor = Palette.canvas
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.center()
