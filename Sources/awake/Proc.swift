@@ -23,10 +23,6 @@ enum Proc {
                     started: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000)
     }
 
-    static func isAlive(_ pid: pid_t) -> Bool {
-        pid > 0 && (kill(pid, 0) == 0 || errno == EPERM)
-    }
-
     /// Ancestors of this process, nearest first, stopping before launchd.
     static func ancestors(limit: Int = 32) -> [Info] {
         var chain: [Info] = []
