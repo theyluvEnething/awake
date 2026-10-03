@@ -93,30 +93,18 @@ enum Store {
 
     // MARK: Lock
 
-    /// Takes the state lock, waiting up to `timeout` seconds. Pass the result to `unlock`.
-    static func lock(timeout: Double) -> Int32? {
+    /// Runs `body` holding the state lock, or returns nil if it stays busy for `timeout` seconds.
+    static func withLock<T>(timeout: Double = 5, _ body: () -> T) -> T? {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let fd = open(dir.appending(path: "lock").path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
         guard fd >= 0 else { return nil }
+        defer { close(fd) }
         let deadline = Date().addingTimeInterval(timeout)
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
-            if Date() >= deadline {
-                close(fd)
-                return nil
-            }
+            if Date() >= deadline { return nil }
             usleep(5_000)
         }
-        return fd
-    }
-
-    static func unlock(_ fd: Int32) {
-        flock(fd, LOCK_UN)
-        close(fd)
-    }
-
-    static func withLock<T>(timeout: Double = 5, _ body: () -> T) -> T? {
-        guard let fd = lock(timeout: timeout) else { return nil }
-        defer { unlock(fd) }
+        defer { flock(fd, LOCK_UN) }
         return body()
     }
 
