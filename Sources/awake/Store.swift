@@ -7,8 +7,10 @@ struct Status: Codable, Equatable, Sendable {
     var pause: String? = nil
     var error: String? = nil
     var guards = Guards()
-    /// When setting the flag last failed, so a missing sudo rule is retried once a minute, not per hook.
-    var failedAt: Double? = nil
+    /// When setting the flag or the energy mode last failed, so a missing sudo rule is retried once a
+    /// minute, not per hook. Each has its own time, so one failing doesn't hold up the other.
+    var flagFailedAt: Double? = nil
+    var energyFailedAt: Double? = nil
     /// When the last lid-closed line went to the log.
     var loggedAt: Double? = nil
 }

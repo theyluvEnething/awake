@@ -67,17 +67,20 @@ enum Reconcile {
         let d = s.decision, now = s.inputs.now, previous = s.status
         var flag = s.flag
         var error: String? = nil
-        var failedAt = previous?.failedAt
+        var flagFailedAt: Double? = nil, energyFailedAt: Double? = nil
         var loggedAt = previous?.loggedAt
         var released = false
         // A missing sudo rule fails the same way every time: retry once a minute, not on every hook.
-        let mayTry = failedAt.map { now - $0 >= 60 } ?? true
+        func waiting(_ failedAt: Double?) -> Bool { failedAt.map { now - $0 < 60 } ?? false }
 
         if d.awake != flag {
-            if mayTry {
+            if waiting(previous?.flagFailedAt) {
+                error = previous?.error
+                flagFailedAt = previous?.flagFailedAt
+            } else {
                 if let problem = System.setSleepDisabled(d.awake) {
                     error = problem
-                    failedAt = now
+                    flagFailedAt = now
                 }
                 let after = System.rootDomain().sleepDisabled
                 if after != flag {
@@ -87,43 +90,45 @@ enum Reconcile {
                     if after { loggedAt = now }
                     flag = after
                 }
-            } else {
-                error = previous?.error
             }
         }
 
         // Low Power while the lid is closed on battery and the switch keeps the Mac running.
         let onBattery = s.inputs.battery.map { !$0.external } ?? false
         let wantLow = s.lidClosed && onBattery && flag
-        if mayTry && Policy.energyNeedsCurrent(wantLow: wantLow, saved: s.savedEnergy) {
-            let current = System.batteryEnergyMode()
-            switch Policy.energyPlan(wantLow: wantLow, saved: s.savedEnergy, current: current) {
-            case .lower(let saved):
-                Store.saveEnergy(saved)
-                if let problem = System.setBatteryEnergyMode(Policy.lowPower) {
+        if Policy.energyNeedsCurrent(wantLow: wantLow, saved: s.savedEnergy) {
+            if waiting(previous?.energyFailedAt) {
+                error = error ?? previous?.error
+                energyFailedAt = previous?.energyFailedAt
+            } else {
+                let current = System.batteryEnergyMode()
+                switch Policy.energyPlan(wantLow: wantLow, saved: s.savedEnergy, current: current) {
+                case .lower(let saved):
+                    Store.saveEnergy(saved)
+                    if let problem = System.setBatteryEnergyMode(Policy.lowPower) {
+                        Store.forgetEnergy()
+                        error = problem
+                        energyFailedAt = now
+                    } else {
+                        Store.log("energy Low Power, was \(energyName(saved))  (lid closed on battery)")
+                    }
+                case .restore(let saved):
+                    if let problem = System.setBatteryEnergyMode(saved) {
+                        error = problem
+                        energyFailedAt = now
+                    } else {
+                        Store.forgetEnergy()
+                        let why = !s.lidClosed ? "lid open" : !onBattery ? "on power" : "switch off"
+                        Store.log("energy \(energyName(saved)) again  (\(why))")
+                    }
+                case .keep:
                     Store.forgetEnergy()
-                    error = problem
-                    failedAt = now
-                } else {
-                    Store.log("energy Low Power, was \(energyName(saved))  (lid closed on battery)")
+                    Store.log("energy stays \(energyName(current ?? 0)), changed outside awake")
+                case .none:
+                    break
                 }
-            case .restore(let saved):
-                if let problem = System.setBatteryEnergyMode(saved) {
-                    error = problem
-                    failedAt = now
-                } else {
-                    Store.forgetEnergy()
-                    let why = !s.lidClosed ? "lid open" : !onBattery ? "on power" : "switch off"
-                    Store.log("energy \(energyName(saved)) again  (\(why))")
-                }
-            case .keep:
-                Store.forgetEnergy()
-                Store.log("energy stays \(energyName(current ?? 0)), changed outside awake")
-            case .none:
-                break
             }
         }
-        if error == nil { failedAt = nil }
         if let error, error != previous?.error { Store.log("error: \(error)") }
 
         // macOS decides about sleep when the lid closes, so releasing the switch with the lid already
@@ -146,7 +151,8 @@ enum Reconcile {
         }
 
         let status = Status(awake: d.awake, flag: flag, pause: d.holds.isEmpty ? nil : d.pause, error: error,
-                            guards: d.guards, failedAt: failedAt, loggedAt: loggedAt)
+                            guards: d.guards, flagFailedAt: flagFailedAt, energyFailedAt: energyFailedAt,
+                            loggedAt: loggedAt)
         if status != previous { Store.setStatus(status) }
         return status
     }
