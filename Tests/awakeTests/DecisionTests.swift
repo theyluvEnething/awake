@@ -230,3 +230,14 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
         #expect(Policy.setting(set, from: from, boot: "boot-1") == want)
     }
 }
+
+@Suite struct ReleaseWindow {
+    @Test func endsWhenTheMacRestarts() {
+        var i = Inputs(now: 1_790_000_000, boot: "boot-1", mode: ModeState(mode: .on, base: .auto, boot: "boot-1"),
+                       leases: [], battery: nil, thermal: .nominal, guards: Guards(),
+                       releaseUntil: 1_790_000_060, releaseBoot: "boot-0")
+        #expect(Policy.decide(i).awake)
+        i.releaseBoot = "boot-1"
+        #expect(!Policy.decide(i).awake)
+    }
+}

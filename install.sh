@@ -74,8 +74,9 @@ if [ "${1:-}" = "--uninstall" ]; then
   rm -rf "$app" "$HOME/Library/Application Support/awake" "$HOME/Library/Logs/awake.log"
   echo "Removed Awake.app, its login items, its state and log, and its Codex hooks."
   echo "The root parts stay until you run mac-setup's scripts/admin.sh again; without Awake.app it"
-  echo "drops awake's Claude hooks and /etc/sudoers.d/awake. By hand instead:"
+  echo "drops awake's Claude hooks, /etc/sudoers.d/awake and the boot-time reset. By hand instead:"
   echo "  sudo rm /etc/sudoers.d/awake"
+  echo "  sudo launchctl bootout system/toybox.awake.reset; sudo rm /Library/LaunchDaemons/toybox.awake.reset.plist"
   exit 0
 fi
 

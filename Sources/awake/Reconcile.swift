@@ -14,9 +14,11 @@ struct Snapshot: Sendable {
     static func take() -> Snapshot {
         let status = Store.status()
         let root = System.rootDomain()
+        let release = Store.release()
         let inputs = Inputs(now: Date().timeIntervalSince1970, boot: System.bootSession(), mode: Store.mode(),
                             leases: leaseEntries(), battery: System.battery(), thermal: System.thermal(),
-                            guards: status?.guards ?? Guards(), releaseUntil: Store.releaseUntil())
+                            guards: status?.guards ?? Guards(), releaseUntil: release?.until,
+                            releaseBoot: release?.boot)
         return Snapshot(inputs: inputs, decision: Policy.decide(inputs), flag: root.sleepDisabled,
                         lidClosed: root.lidClosed, status: status, savedEnergy: Store.savedEnergy())
     }
@@ -124,7 +126,7 @@ enum Reconcile {
         }
 
         for name in d.expired { Store.removeLease(name) }
-        if let until = s.inputs.releaseUntil, until <= now { Store.clearRelease() }
+        if s.inputs.releaseUntil != nil && !d.released { Store.clearRelease() }
 
         if flag && s.lidClosed {
             if now - (loggedAt ?? 0) >= 120 {

@@ -98,8 +98,9 @@ struct Inputs: Sendable {
     var battery: Battery?
     var thermal: Thermal
     var guards: Guards
-    /// Sleep Now and logout keep the flag off until this time.
+    /// Sleep Now and logout keep the flag off until this time, within the boot they happened in.
     var releaseUntil: Double?
+    var releaseBoot: String? = nil
 }
 
 /// Something that wants the Mac running with the lid closed.
@@ -218,7 +219,7 @@ enum Policy {
         if d.pause == nil && i.thermal >= .serious {
             d.pause = "thermal state \(i.thermal == .critical ? "critical" : "serious")"
         }
-        d.released = (i.releaseUntil ?? 0) > i.now
+        d.released = (i.releaseUntil ?? 0) > i.now && (i.releaseBoot ?? i.boot) == i.boot
         return d
     }
 

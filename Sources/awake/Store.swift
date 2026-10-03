@@ -22,7 +22,7 @@ enum Store {
     static let logFile = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/awake.log")
 
     private struct SavedEnergy: Codable { var battery: Int }
-    private struct Release: Codable { var until: Double }
+    private struct Release: Codable { var until: Double; var boot: String? }
 
     // MARK: Files
 
@@ -47,8 +47,9 @@ enum Store {
     static func saveEnergy(_ mode: Int) { write(SavedEnergy(battery: mode), "energy") }
     static func forgetEnergy() { remove(dir.appending(path: "energy")) }
 
-    static func releaseUntil() -> Double? { read(Release.self, "release")?.until }
-    static func release(until: Double) { write(Release(until: until), "release") }
+    /// Until when, and in which boot, Sleep Now or logout keep the switch off.
+    static func release() -> (until: Double, boot: String?)? { read(Release.self, "release").map { ($0.until, $0.boot) } }
+    static func release(until: Double) { write(Release(until: until, boot: System.bootSession()), "release") }
     static func clearRelease() { remove(dir.appending(path: "release")) }
 
     // MARK: Leases
