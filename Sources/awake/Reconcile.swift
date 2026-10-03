@@ -4,7 +4,7 @@ import Foundation
 struct Snapshot: Sendable {
     var inputs: Inputs
     var decision: Decision
-    /// The kernel's SleepDisabled switch right now.
+    /// The kernel's SleepDisabled flag right now: on means lid sleep is off.
     var flag: Bool
     var lidClosed: Bool
     var status: Status?
@@ -85,7 +85,8 @@ enum Reconcile {
                 let after = System.rootDomain().sleepDisabled
                 if after != flag {
                     let elsewhere = previous.map { $0.flag != flag } ?? false
-                    Store.log("\(after ? "on " : "off") \(reason(d, s, elsewhere: elsewhere))  (\(conditions(s)))")
+                    let state = Format.lidSleep(after).lowercased().padding(toLength: 3, withPad: " ", startingAt: 0)
+                    Store.log("lid sleep \(state)  \(reason(d, s, elsewhere: elsewhere))  (\(conditions(s)))")
                     released = flag && !after
                     if after { loggedAt = now }
                     flag = after
@@ -93,7 +94,7 @@ enum Reconcile {
             }
         }
 
-        // Low Power while the lid is closed on battery and the switch keeps the Mac running.
+        // Low Power while the lid is closed on battery and the flag keeps the Mac running.
         let onBattery = s.inputs.battery.map { !$0.external } ?? false
         let wantLow = s.lidClosed && onBattery && flag
         if Policy.energyNeedsCurrent(wantLow: wantLow, saved: s.savedEnergy) {
@@ -110,7 +111,7 @@ enum Reconcile {
                         error = problem
                         energyFailedAt = now
                     } else {
-                        Store.log("energy Low Power, was \(energyName(saved))  (lid closed on battery)")
+                        Store.log("Low Power on, was \(Format.energyMode(saved))  (lid closed on battery)")
                     }
                 case .restore(let saved):
                     if let problem = System.setBatteryEnergyMode(saved) {
@@ -118,12 +119,12 @@ enum Reconcile {
                         energyFailedAt = now
                     } else {
                         Store.forgetEnergy()
-                        let why = !s.lidClosed ? "lid open" : !onBattery ? "on power" : "switch off"
-                        Store.log("energy \(energyName(saved)) again  (\(why))")
+                        let why = !s.lidClosed ? "lid open" : !onBattery ? "plugged in" : "lid sleep on"
+                        Store.log("Low Power off, \(Format.energyMode(saved)) again  (\(why))")
                     }
                 case .keep:
                     Store.forgetEnergy()
-                    Store.log("energy stays \(energyName(current ?? 0)), changed outside awake")
+                    Store.log("\(Format.energyMode(current ?? 0)) kept, the energy mode was changed outside Awake")
                 case .none:
                     break
                 }
@@ -131,10 +132,10 @@ enum Reconcile {
         }
         if let error, error != previous?.error { Store.log("error: \(error)") }
 
-        // macOS decides about sleep when the lid closes, so releasing the switch with the lid already
+        // macOS decides about sleep when the lid closes, so releasing the flag with the lid already
         // closed leaves the Mac running. Put it to sleep instead.
         if released && s.lidClosed && sleepAfterRelease {
-            Store.log("sleepnow  (lid closed)")
+            Store.log("going to sleep  (lid closed)")
             System.sleepNow()
         }
 
@@ -143,16 +144,15 @@ enum Reconcile {
 
         if flag && s.lidClosed {
             if now - (loggedAt ?? 0) >= 120 {
-                Store.log("lid closed  (\(conditions(s)))")
+                Store.log("still running  (\(conditions(s)))")
                 loggedAt = now
             }
         } else {
             loggedAt = nil
         }
 
-        let status = Status(awake: d.awake, flag: flag, pause: d.holds.isEmpty ? nil : d.pause, error: error,
-                            guards: d.guards, flagFailedAt: flagFailedAt, energyFailedAt: energyFailedAt,
-                            loggedAt: loggedAt)
+        let status = Status(awake: d.awake, flag: flag, error: error, guards: d.guards, flagFailedAt: flagFailedAt,
+                            energyFailedAt: energyFailedAt, loggedAt: loggedAt)
         if status != previous { Store.setStatus(status) }
         return status
     }
@@ -160,35 +160,22 @@ enum Reconcile {
     private static func reason(_ d: Decision, _ s: Snapshot, elsewhere: Bool) -> String {
         let text: String
         if d.awake {
-            text = d.holds.map { Format.label($0, now: s.inputs.now) }.joined(separator: ", ")
+            text = d.holds.map { Format.hold($0, now: s.inputs.now) }.joined(separator: ", ")
         } else if d.released {
             text = "sleep requested"
-        } else if let pause = d.pause, !d.holds.isEmpty {
-            text = "paused: \(pause)"
+        } else if let pause = d.pause {
+            text = Format.paused(pause)
         } else {
-            text = d.mode == .off ? "mode Off" : "nothing running"
+            text = d.mode == .off ? "Awake is off" : "nothing running"
         }
-        return elsewhere ? "\(text), the switch was changed outside awake" : text
+        return elsewhere ? "\(text), after \(Format.changedOutside(flag: s.flag))" : text
     }
 
-    static func conditions(_ s: Snapshot) -> String {
+    /// "lid closed, 80 %, on battery, 29.8 °C", plus the thermal state when it isn't normal.
+    private static func conditions(_ s: Snapshot) -> String {
         var parts = [s.lidClosed ? "lid closed" : "lid open"]
-        if let b = s.inputs.battery {
-            var battery = "battery \(b.level) %"
-            if let t = b.temperature { battery += String(format: " %.1f °C", t) }
-            if b.charging { battery += ", charging" } else if b.external { battery += ", on power" }
-            parts.append(battery)
-        }
-        if s.inputs.thermal != .nominal { parts.append("thermal \(s.inputs.thermal)") }
+        if let b = s.inputs.battery { parts.append(Format.battery(b)) }
+        if s.inputs.thermal != .nominal { parts.append(Format.thermalState(s.inputs.thermal)) }
         return parts.joined(separator: ", ")
-    }
-
-    static func energyName(_ mode: Int) -> String {
-        switch mode {
-        case 0: "Automatic"
-        case 1: "Low Power"
-        case 2: "High Power"
-        default: "mode \(mode)"
-        }
     }
 }

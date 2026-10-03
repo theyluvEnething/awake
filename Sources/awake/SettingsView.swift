@@ -10,8 +10,8 @@ final class AwakeModel {
     }
 }
 
-/// The settings window: the same Awake switch as the menu, staying awake indefinitely, and what
-/// awake sees right now.
+/// The settings window: the same Awake toggle as the menu, Stay awake indefinitely, and what awake
+/// sees right now. `awake status` prints the same rows.
 struct SettingsView: View {
     let model: AwakeModel
     let setAwake: @MainActor @Sendable (Bool) -> Void
@@ -24,25 +24,30 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle(isOn: Binding(get: { d.mode != .off }, set: setAwake)) {
-                    Text("Awake")
-                    Text("Keeps the Mac running with the lid closed while Claude or Codex works.")
+                    Text(Format.mode(.auto))
+                    Text(Format.sentence(Format.explain(.auto)))
                 }
                 Toggle(isOn: Binding(get: { d.mode == .on }, set: setIndefinitely)) {
-                    Text("Stay awake indefinitely")
-                    Text("Even when nothing runs, until you turn it off, restart or log out.")
+                    Text(Format.mode(.on))
+                    Text(Format.sentence(Format.explain(.on)))
                 }
             }
 
             Section("Now") {
-                LabeledContent("Closing the lid", value: s.flag ? "Keeps it running" : "Puts it to sleep")
-                ForEach(d.holds, id: \.name) { hold in
-                    Text(Format.label(hold, now: s.inputs.now))
+                LabeledContent {
+                    Text(Format.lidSleep(s.flag))
+                } label: {
+                    Text("Lid sleep")
+                    Text(Format.sentence(Format.lidEffect(s.flag)))
                 }
-                if let pause = d.pause, !d.holds.isEmpty {
-                    LabeledContent("Paused", value: pause.prefix(1).uppercased() + pause.dropFirst())
+                ForEach(d.holds, id: \.name) { hold in
+                    Text(Format.hold(hold, now: s.inputs.now))
+                }
+                if let pause = d.pause {
+                    LabeledContent("Paused", value: Format.capitalized(Format.pause(pause)))
                 }
                 if let error = s.status?.error {
-                    Label(error.prefix(1).uppercased() + error.dropFirst(), systemImage: "exclamationmark.triangle")
+                    Label(Format.capitalized(error), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
                 if s.flag {
@@ -52,19 +57,12 @@ struct SettingsView: View {
 
             Section {
                 if let b = s.inputs.battery {
-                    LabeledContent("Charge", value: "\(b.level) %, " +
-                                   (b.charging ? "charging" : b.external ? "on power, not charging" : "on battery"))
-                    if let t = b.temperature {
-                        LabeledContent("Temperature", value: String(format: "%.1f °C", t))
-                    }
+                    LabeledContent("Battery", value: Format.battery(b))
                 }
-                LabeledContent("Thermal state", value: "\(s.inputs.thermal)".capitalized)
-                LabeledContent("Low Power", value: s.savedEnergy == nil ? "Not set by Awake"
-                               : "On while the lid is closed, set by Awake")
-            } header: {
-                Text("Battery")
+                LabeledContent("Thermal state", value: Format.thermal(s.inputs.thermal))
+                LabeledContent("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
             } footer: {
-                Text("Awake lets the Mac sleep at 20 % battery unless it's charging, at 40 °C battery temperature and when macOS reports heavy thermal pressure.")
+                Text(Format.guards)
             }
         }
         .formStyle(.grouped)

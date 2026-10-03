@@ -66,7 +66,7 @@ stop_agents() {
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
-  # Off first: the switch goes back to 0 and an energy mode awake changed comes back.
+  # Off first: lid sleep comes back on and so does an energy mode awake changed.
   if [ -x "$bin" ]; then "$bin" set off >/dev/null || true; fi
   stop_agents
   for label in "${labels[@]}"; do rm -f "$agents/$label.plist"; done

@@ -2,13 +2,15 @@ import Foundation
 
 // The decision logic, kept free of I/O so it can be checked without root.
 
-/// Off: the Mac sleeps when the lid closes. Auto: it keeps running while an agent turn runs.
-/// On: it keeps running until the mode changes, the Mac restarts or the user logs out.
+/// The modes the UI calls Off, Awake and Stay awake indefinitely (see `Format.mode`). Off: the Mac
+/// sleeps when the lid closes. Awake: it keeps running while an agent turn runs. Stay awake
+/// indefinitely: it keeps running until the mode changes, the Mac restarts or the user logs out.
 enum Mode: String, Codable, Sendable {
     case off, auto, on
 }
 
-/// The `mode` file. On only lasts for the boot it was turned on in, then falls back to `base`.
+/// The `mode` file. Stay awake indefinitely only lasts for the boot it was turned on in, then falls
+/// back to `base`.
 struct ModeState: Codable, Equatable, Sendable {
     var mode: Mode
     var base: Mode? = nil
@@ -134,11 +136,19 @@ struct Hold: Equatable, Sendable {
     var finishing = false
 }
 
+/// Why a guard keeps the Mac sleeping although something holds it.
+enum Pause: Equatable, Sendable {
+    case battery(Int)
+    /// Degrees Celsius.
+    case heat(Double)
+    case thermal(Thermal)
+}
+
 struct Decision: Equatable, Sendable {
     var mode: Mode
     var holds: [Hold] = []
-    /// Why a guard keeps the Mac sleeping anyway.
-    var pause: String? = nil
+    /// Only set while something holds the Mac.
+    var pause: Pause? = nil
     var guards = Guards()
     var released = false
     /// Lease files that no longer matter.
@@ -222,14 +232,15 @@ enum Policy {
             if let t = b.temperature {
                 d.guards.heat = t >= hot || (i.guards.heat && t >= coolResume)
             }
-            if d.guards.battery {
-                d.pause = "battery at \(b.level) %"
-            } else if d.guards.heat, let t = b.temperature {
-                d.pause = String(format: "battery at %.1f °C", t)
-            }
         }
-        if d.pause == nil && i.thermal >= .serious {
-            d.pause = "thermal state \(i.thermal == .critical ? "critical" : "serious")"
+        if !d.holds.isEmpty {
+            if let b = i.battery, d.guards.battery {
+                d.pause = .battery(b.level)
+            } else if let t = i.battery?.temperature, d.guards.heat {
+                d.pause = .heat(t)
+            } else if i.thermal >= .serious {
+                d.pause = .thermal(i.thermal)
+            }
         }
         d.released = (i.releaseUntil ?? 0) > i.now && (i.releaseBoot ?? i.boot) == i.boot
         return d
@@ -298,7 +309,8 @@ extension Lease {
 }
 
 extension Policy {
-    /// The mode in force: On ends when the Mac restarts and falls back to the mode it replaced.
+    /// The mode in force: Stay awake indefinitely ends when the Mac restarts and falls back to the
+    /// mode it replaced.
     static func effectiveMode(_ state: ModeState?, boot: String) -> Mode {
         guard let state else { return .off }
         if state.mode == .on && state.boot != boot {

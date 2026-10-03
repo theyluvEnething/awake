@@ -12,7 +12,7 @@ enum System {
         return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
-    /// The kernel's SleepDisabled switch (what awake owns) and whether the lid is closed.
+    /// The kernel's SleepDisabled flag (what awake owns) and whether the lid is closed.
     static func rootDomain() -> (sleepDisabled: Bool, lidClosed: Bool) {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceNameMatching("IOPMrootDomain"))
         guard service != 0 else { return (false, false) }

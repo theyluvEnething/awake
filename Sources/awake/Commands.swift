@@ -2,13 +2,16 @@ import Foundation
 
 enum Commands {
     static let usage = """
-        usage: awake set off|auto|on   Off: sleep on lid close. Auto: stay up while Claude or Codex works.
-                                       On: stay up until changed, a restart or logout.
+        usage: awake set off|auto|on   choose \(Format.mode(.off)), \(Format.mode(.auto)) or \(Format.mode(.on))
                awake run -- <command>  keep the Mac running while the command runs, in any mode
                awake for 90m           keep it running for 90s, 90m, 2h or 1h30m, in any mode
                awake stop              end every run and for hold
-               awake status            what awake sees and decides
+               awake status            show what Awake sees and decides
                awake reconcile         apply the decision now (launchd runs this every 30 seconds)
+
+        modes: off   \(Format.mode(.off)): \(Format.explain(.off))
+               auto  \(Format.mode(.auto)): \(Format.explain(.auto))
+               on    \(Format.mode(.on)): \(Format.explain(.on))
         """
 
     /// `awake set off|auto|on`
@@ -103,47 +106,31 @@ enum Commands {
         return code
     }
 
-    /// `awake status`
+    /// `awake status`: the rows of the Settings window, plus the lid.
     static func status() -> Int32 {
         let s = Snapshot.take()
-        let d = s.decision, now = s.inputs.now
-        var rows: [(String, String)] = [
-            ("mode", modeName(d.mode)),
-            ("switch", s.flag ? "on: closing the lid keeps the Mac running" : "off: closing the lid puts it to sleep"),
-            ("lid", s.lidClosed ? "closed" : "open"),
+        let d = s.decision
+        var rows = [
+            ("Mode", Format.mode(d.mode)),
+            ("Lid sleep", "\(Format.lidSleep(s.flag)): \(Format.lidEffect(s.flag))"),
+            ("Lid", s.lidClosed ? "Closed" : "Open"),
         ]
-        if let b = s.inputs.battery {
-            var text = "\(b.level) %, " + (b.charging ? "charging" : b.external ? "on power, not charging" : "on battery")
-            if let t = b.temperature { text += String(format: ", %.1f °C", t) }
-            rows.append(("battery", text))
+        let holds = d.holds.map { Format.hold($0, now: s.inputs.now) }
+        for (i, hold) in (holds.isEmpty ? ["None"] : holds).enumerated() {
+            rows.append((i == 0 ? "Holds" : "", hold))
         }
-        rows.append(("thermal", "\(s.inputs.thermal)"))
-        let energy = System.batteryEnergyMode().map(Reconcile.energyName) ?? "unknown"
-        rows.append(("energy", "on battery: \(energy)" + (s.savedEnergy.map { ", set by awake, \(Reconcile.energyName($0)) comes back" } ?? "")))
-        rows.append(("guards", d.pause.map { "paused: \($0)" } ?? "none"))
-        if let error = s.status?.error { rows.append(("error", error)) }
-        if d.holds.isEmpty {
-            rows.append(("holds", "none"))
-        } else {
-            for (i, hold) in d.holds.enumerated() {
-                rows.append((i == 0 ? "holds" : "", Format.label(hold, now: now)))
-            }
+        if let pause = d.pause { rows.append(("Paused", Format.capitalized(Format.pause(pause)))) }
+        if let status = s.status, status.awake != s.flag {
+            rows.append(("Warning", Format.capitalized(Format.changedOutside(flag: s.flag))))
         }
-        if s.flag != d.awake {
-            rows.append(("note", "the switch differs from awake's decision; the next reconcile fixes it"))
-        }
+        if let error = s.status?.error { rows.append(("Error", Format.capitalized(error))) }
+        if let b = s.inputs.battery { rows.append(("Battery", Format.battery(b))) }
+        rows.append(("Thermal state", Format.thermal(s.inputs.thermal)))
+        rows.append(("Low Power", Format.lowPower(setByAwake: s.savedEnergy != nil)))
         for (key, value) in rows {
-            print(key.padding(toLength: 9, withPad: " ", startingAt: 0) + value)
+            print(key.padding(toLength: 15, withPad: " ", startingAt: 0) + value)
         }
         return 0
-    }
-
-    static func modeName(_ mode: Mode) -> String {
-        switch mode {
-        case .off: "Off"
-        case .auto: "While agents work"
-        case .on: "On"
-        }
     }
 
     private static func report(_ status: Status?) {
@@ -153,8 +140,8 @@ enum Commands {
         }
         if let error = status.error {
             FileHandle.standardError.write(Data("awake: \(error)\n".utf8))
-        } else if let pause = status.pause {
-            print("Paused: \(pause).")
+        } else if let pause = Snapshot.take().decision.pause {
+            print(Format.paused(pause) + ".")
         }
     }
 

@@ -67,6 +67,8 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     // MARK: Menu
 
+    /// Every item has an icon, as in macOS's own menus: Sleep Now, Settings and Quit use the
+    /// symbols of the Apple and app menus.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let s = Snapshot.take()
         model.snapshot = s
@@ -79,27 +81,24 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(header)
         menu.addItem(.separator())
 
-        let toggle = NSMenuItem(title: "Awake", action: #selector(toggleAwake), keyEquivalent: "")
-        toggle.target = self
+        let toggle = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
         toggle.state = s.decision.mode == .off ? .off : .on
         menu.addItem(toggle)
-        // While the switch is on, macOS ignores the Apple menu's Sleep too.
+        // While lid sleep is off, macOS ignores the Apple menu's Sleep too.
         if s.flag {
-            let sleep = NSMenuItem(title: "Sleep Now", action: #selector(sleepNow), keyEquivalent: "")
-            sleep.target = self
-            menu.addItem(sleep)
+            menu.addItem(menuItem("Sleep Now", "sleep", #selector(sleepNow)))
         }
         menu.addItem(.separator())
-
-        let settings = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
-        settings.target = self
-        menu.addItem(settings)
+        menu.addItem(menuItem("Settings…", "gear", #selector(openSettings)))
         menu.addItem(.separator())
+        menu.addItem(menuItem("Quit Awake", "xmark.rectangle", #selector(quit)))
+    }
 
-        let quit = NSMenuItem(title: "Quit Awake", action: #selector(quit), keyEquivalent: "")
-        quit.target = self
-        quit.image = NSImage(systemSymbolName: "xmark.rectangle", accessibilityDescription: nil)
-        menu.addItem(quit)
+    private func menuItem(_ title: String, _ symbol: String, _ action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        return item
     }
 
     @objc private func toggleAwake() {
@@ -114,7 +113,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         change { on ? Store.setMode(.on) : Store.endOn() }
     }
 
-    /// Releases the switch for a minute so the Mac can sleep, then asks for sleep.
+    /// Releases the flag for a minute so the Mac can sleep, then asks for sleep.
     @objc func sleepNow() {
         change(sleepAfterRelease: false) { Store.release(until: Date().timeIntervalSince1970 + 60) }
         System.sleepNow()
@@ -169,18 +168,17 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private func summary(_ s: Snapshot) -> String {
         if let warning = warning(s) { return warning }
         let d = s.decision
-        if s.flag {
-            guard let first = d.holds.first else { return "Stays on with the lid closed" }
-            return Format.label(first, now: s.inputs.now) + (d.holds.count > 1 ? " +\(d.holds.count - 1)" : "")
+        if s.flag, let first = d.holds.first {
+            return Format.hold(first, now: s.inputs.now) + (d.holds.count > 1 ? " +\(d.holds.count - 1)" : "")
         }
         if d.released { return "Going to sleep" }
-        if let pause = d.pause, !d.holds.isEmpty { return "Paused: \(pause)" }
-        return "Sleeps when the lid closes"
+        if let pause = d.pause { return Format.paused(pause) }
+        return Format.capitalized(Format.lidEffect(s.flag))
     }
 
-    /// The sudo rule is missing, or the switch has differed from awake's decision for a few seconds.
+    /// The sudo rule is missing, or the flag has differed from awake's decision for a few seconds.
     private func warning(_ s: Snapshot) -> String? {
-        if let error = s.status?.error { return error.prefix(1).uppercased() + error.dropFirst() }
+        if let error = s.status?.error { return Format.capitalized(error) }
         guard let status = s.status, status.awake != s.flag else {
             disagreeSince = nil
             return nil
@@ -193,7 +191,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             return nil
         }
         guard s.inputs.now - since >= 2 else { return nil }
-        return s.flag ? "The switch was turned on outside Awake" : "The switch is off although Awake wants it on"
+        return Format.capitalized(Format.changedOutside(flag: s.flag))
     }
 
     private func reconcileInBackground() {
@@ -271,7 +269,8 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
     }
 
-    /// Logout, restart or shutdown: On ends, the switch goes off and the energy mode comes back.
+    /// Logout, restart or shutdown: Stay awake indefinitely ends, lid sleep comes back on and so does
+    /// the energy mode.
     private func loggingOut() {
         _ = Store.withLock(timeout: 2) {
             Store.endOn()

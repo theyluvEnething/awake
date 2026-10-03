@@ -4,7 +4,6 @@ import Foundation
 struct Status: Codable, Equatable, Sendable {
     var awake: Bool
     var flag: Bool
-    var pause: String? = nil
     var error: String? = nil
     var guards = Guards()
     /// When setting the flag or the energy mode last failed, so a missing sudo rule is retried once a
@@ -31,12 +30,12 @@ enum Store {
 
     static func mode() -> ModeState? { read(ModeState.self, "mode") }
 
-    /// Sets a mode. On remembers the mode it replaced and the boot it belongs to.
+    /// Sets a mode. Stay awake indefinitely remembers the mode it replaced and the boot it belongs to.
     static func setMode(_ mode: Mode) {
         write(Policy.setting(mode, from: self.mode(), boot: System.bootSession()), "mode")
     }
 
-    /// Ends On, as logout does, and returns to the mode On replaced.
+    /// Ends Stay awake indefinitely, as logout does, and returns to the mode it replaced.
     static func endOn() {
         if let state = mode(), state.mode == .on {
             write(ModeState(mode: state.base ?? .off), "mode")
@@ -50,7 +49,7 @@ enum Store {
     static func saveEnergy(_ mode: Int) { write(SavedEnergy(battery: mode), "energy") }
     static func forgetEnergy() { remove(dir.appending(path: "energy")) }
 
-    /// Until when, and in which boot, Sleep Now or logout keep the switch off.
+    /// Until when, and in which boot, Sleep Now or logout keep the flag off.
     static func release() -> (until: Double, boot: String?)? { read(Release.self, "release").map { ($0.until, $0.boot) } }
     static func release(until: Double) { write(Release(until: until, boot: System.bootSession()), "release") }
     static func clearRelease() { remove(dir.appending(path: "release")) }
