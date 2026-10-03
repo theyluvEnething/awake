@@ -18,16 +18,13 @@ enum Hook {
         // In the desktop apps the agent process lives for hours; it's the pid that catches a crash.
         let owner = Proc.ancestors().first { $0.name == agent }?.pid
         let project = (json["cwd"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }
-        let name = Store.leaseName(agent: agent, session: session)
 
-        // Hooks run concurrently. If the lock stays busy, still record the event and leave the
-        // decision to the next reconcile, at most 30 seconds away.
-        let fd = Store.lock(timeout: 0.8)
-        defer { if let fd { Store.unlock(fd) } }
-        let old = Store.lease(name)
-        let lease = Lease.applying(event, stamp: stamp, agent: agent, sessionId: session, pid: owner,
-                                   project: project, to: old, now: Date().timeIntervalSince1970)
-        if lease != old { Store.setLease(name, lease) }
-        if fd != nil { Reconcile.run(locked: true) }
+        // Hooks run concurrently, so the event is queued and the reconcile applies it to the lease
+        // under the lock. All but Codex's SessionEnd run async, so waiting up to 5 seconds for the
+        // lock doesn't hold up the agent. If it stays busy, the next reconcile applies the event.
+        Store.queue(QueuedEvent(lease: Store.leaseName(agent: agent, session: session), event: event, stamp: stamp,
+                                agent: agent, sessionId: session, pid: owner, project: project,
+                                now: Date().timeIntervalSince1970))
+        Reconcile.run()
     }
 }

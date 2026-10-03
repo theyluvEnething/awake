@@ -55,6 +55,14 @@ enum Reconcile {
     }
 
     private static func apply(sleepAfterRelease: Bool) -> Status {
+        // Hooks only queue their events, so every lease changes here, under the lock.
+        for (file, event) in Store.queuedEvents() {
+            let old = Store.lease(event.lease)
+            let lease = Lease.applying(event, to: old)
+            if lease != old { Store.setLease(event.lease, lease) }
+            Store.removeEvent(file)
+        }
+
         let s = Snapshot.take()
         let d = s.decision, now = s.inputs.now, previous = s.status
         var flag = s.flag

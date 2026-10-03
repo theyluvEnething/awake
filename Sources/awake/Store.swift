@@ -13,12 +13,13 @@ struct Status: Codable, Equatable, Sendable {
     var loggedAt: Double? = nil
 }
 
-/// ~/Library/Application Support/awake: mode, leases/, saved energy mode, status, release, lock.
+/// ~/Library/Application Support/awake: mode, leases/, events/, saved energy mode, status, release, lock.
 /// Every file is small JSON, written to a temporary file and renamed into place.
 enum Store {
     static let dir = FileManager.default.homeDirectoryForCurrentUser
         .appending(path: "Library/Application Support/awake")
     static let leasesDir = dir.appending(path: "leases")
+    static let eventsDir = dir.appending(path: "events")
     static let logFile = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/awake.log")
 
     private struct SavedEnergy: Codable { var battery: Int }
@@ -65,6 +66,22 @@ enum Store {
     static func lease(_ name: String) -> Lease? { read(Lease.self, at: leasesDir.appending(path: name)) }
     static func setLease(_ name: String, _ lease: Lease) { write(lease, at: leasesDir.appending(path: name)) }
     static func removeLease(_ name: String) { remove(leasesDir.appending(path: name)) }
+
+    /// Hook events wait in events/ for the next reconcile, which applies them under the lock.
+    static func queue(_ event: QueuedEvent) {
+        write(event, at: eventsDir.appending(path: "\(event.lease).\(getpid()).\(UInt64(event.stamp * 1000))"))
+    }
+
+    static func queuedEvents() -> [(file: String, event: QueuedEvent)] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: eventsDir.path)) ?? []
+        return names.compactMap { name in
+            guard LeaseKind(fileName: name) != nil,
+                  let event = read(QueuedEvent.self, at: eventsDir.appending(path: name)) else { return nil }
+            return (name, event)
+        }
+    }
+
+    static func removeEvent(_ file: String) { remove(eventsDir.appending(path: file)) }
 
     /// "claude-<session>", with anything that isn't a plain ASCII letter, digit, - or _ replaced.
     static func leaseName(agent: String, session: String) -> String {

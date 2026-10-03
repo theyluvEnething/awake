@@ -53,7 +53,7 @@ struct LeaseEntry: Equatable, Sendable {
     var pidAlive: Bool
 }
 
-enum HookEvent: Sendable {
+enum HookEvent: String, Codable, Sendable {
     /// A prompt or tool call: the session is working.
     case activity
     /// Stop, StopFailure, SessionEnd or Codex's Interrupt: the turn is over.
@@ -66,6 +66,18 @@ enum HookEvent: Sendable {
         default: return nil
         }
     }
+}
+
+/// One hook event as its hook saw it, queued until a reconcile applies it to the lease under the lock.
+struct QueuedEvent: Codable, Equatable, Sendable {
+    var lease: String
+    var event: HookEvent
+    var stamp: Double
+    var agent: String
+    var sessionId: String
+    var pid: Int32? = nil
+    var project: String? = nil
+    var now: Double
 }
 
 struct Battery: Equatable, Sendable {
@@ -267,20 +279,19 @@ extension Lease {
     /// Applies one hook event stamped with the time its hook process started. The result doesn't
     /// depend on the order events arrive in: activity stamped before the latest end can't revive
     /// the lease, and an end stamped before the latest activity can't end it.
-    static func applying(_ event: HookEvent, stamp: Double, agent: String, sessionId: String,
-                         pid: Int32?, project: String?, to old: Lease?, now: Double) -> Lease {
-        var lease = old ?? Lease(agent: agent, sessionId: sessionId, started: stamp)
-        if let pid { lease.pid = pid }
-        if let project { lease.project = project }
-        switch event {
+    static func applying(_ e: QueuedEvent, to old: Lease?) -> Lease {
+        var lease = old ?? Lease(agent: e.agent, sessionId: e.sessionId, started: e.stamp)
+        if let pid = e.pid { lease.pid = pid }
+        if let project = e.project { lease.project = project }
+        switch e.event {
         case .activity:
-            let wasCurrent = old.map { $0.isRunning && now - ($0.lastSeen ?? 0) < Policy.expiry } ?? false
-            lease.lastSeen = max(lease.lastSeen ?? stamp, stamp)
+            let wasCurrent = old.map { $0.isRunning && e.now - ($0.lastSeen ?? 0) < Policy.expiry } ?? false
+            lease.lastSeen = max(lease.lastSeen ?? e.stamp, e.stamp)
             if !wasCurrent && lease.isRunning {
-                lease.started = stamp
+                lease.started = e.stamp
             }
         case .end:
-            lease.endedAt = max(lease.endedAt ?? stamp, stamp)
+            lease.endedAt = max(lease.endedAt ?? e.stamp, e.stamp)
         }
         return lease
     }

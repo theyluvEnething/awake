@@ -4,7 +4,8 @@ import Testing
 private let now = 1_790_000_000.0
 
 private func apply(_ event: HookEvent, _ stamp: Double, to old: Lease?, pid: Int32? = 7) -> Lease {
-    Lease.applying(event, stamp: stamp, agent: "claude", sessionId: "s1", pid: pid, project: "toybox", to: old, now: now)
+    Lease.applying(QueuedEvent(lease: "claude-s1", event: event, stamp: stamp, agent: "claude", sessionId: "s1",
+                               pid: pid, project: "toybox", now: now), to: old)
 }
 
 @Suite struct HookEvents {
