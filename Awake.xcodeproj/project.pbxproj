@@ -1,0 +1,291 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000001 /* AppIcon.icon */; };
+		B00000000000000000000002 /* HelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* HelperProtocol.swift */; };
+		B00000000000000000000003 /* awake-helper in Embed helper */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* awake-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		B00000000000000000000004 /* helper.plist in LaunchDaemons */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* helper.plist */; };
+		B00000000000000000000005 /* awake.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* awake.plist */; };
+		B00000000000000000000006 /* reconcile.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* reconcile.plist */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D00000000000000000000001 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000003;
+			remoteInfo = "awake-helper";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E00000000000000000000004 /* Embed helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (B00000000000000000000003 /* awake-helper in Embed helper */, );
+			name = "Embed helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E00000000000000000000005 /* LaunchDaemons */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchDaemons;
+			dstSubfolderSpec = 1;
+			files = (B00000000000000000000004 /* helper.plist in LaunchDaemons */, );
+			name = LaunchDaemons;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E00000000000000000000006 /* LaunchAgents */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchAgents;
+			dstSubfolderSpec = 1;
+			files = (
+				B00000000000000000000005 /* awake.plist in LaunchAgents */,
+				B00000000000000000000006 /* reconcile.plist in LaunchAgents */,
+			);
+			name = LaunchAgents;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F00000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		F00000000000000000000002 /* HelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/awake/HelperProtocol.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000003 /* helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchDaemons/io.github.theyluvenething.awake.helper.plist; sourceTree = "<group>"; };
+		F00000000000000000000004 /* awake.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.plist; sourceTree = "<group>"; };
+		F00000000000000000000005 /* reconcile.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.reconcile.plist; sourceTree = "<group>"; };
+		F00000000000000000000006 /* Awake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Awake.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F00000000000000000000007 /* awake-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "awake-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		F00000000000000000000008 /* awake */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/awake;
+			sourceTree = "<group>";
+		};
+		F00000000000000000000009 /* awake-helper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Sources/awake-helper";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E00000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000008 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F00000000000000000000010 = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000008 /* awake */,
+				F00000000000000000000009 /* awake-helper */,
+				F00000000000000000000002 /* HelperProtocol.swift */,
+				F00000000000000000000011 /* App */,
+				F00000000000000000000012 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F00000000000000000000011 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000001 /* AppIcon.icon */,
+				F00000000000000000000003 /* helper.plist */,
+				F00000000000000000000004 /* awake.plist */,
+				F00000000000000000000005 /* reconcile.plist */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		F00000000000000000000012 /* Products */ = {
+			isa = PBXGroup;
+			children = (F00000000000000000000006 /* Awake.app */, F00000000000000000000007 /* awake-helper */, );
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000002 /* Awake */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000002;
+			buildPhases = (
+				E00000000000000000000001 /* Sources */,
+				E00000000000000000000002 /* Frameworks */,
+				E00000000000000000000003 /* Resources */,
+				E00000000000000000000004 /* Embed helper */,
+				E00000000000000000000005 /* LaunchDaemons */,
+				E00000000000000000000006 /* LaunchAgents */,
+			);
+			buildRules = ();
+			dependencies = (D00000000000000000000002, );
+			fileSystemSynchronizedGroups = (F00000000000000000000008 /* awake */, );
+			name = Awake;
+			productName = Awake;
+			productReference = F00000000000000000000006 /* Awake.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000003 /* awake-helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000003;
+			buildPhases = (E00000000000000000000007 /* Sources */, E00000000000000000000008 /* Frameworks */, );
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (F00000000000000000000009 /* awake-helper */, );
+			name = "awake-helper";
+			productName = "awake-helper";
+			productReference = F00000000000000000000007 /* awake-helper */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2700; };
+			buildConfigurationList = C00000000000000000000001;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base, );
+			mainGroup = F00000000000000000000010;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F00000000000000000000012 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A00000000000000000000002 /* Awake */, A00000000000000000000003 /* awake-helper */, );
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000001 /* AppIcon.icon in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E00000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000007 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000002 /* HelperProtocol.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D00000000000000000000002 = {isa = PBXTargetDependency; target = A00000000000000000000003 /* awake-helper */; targetProxy = D00000000000000000000001; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C00000000000000000000011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (arm64, x86_64, );
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = KSF29ZC99W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		C00000000000000000000012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (arm64, x86_64, );
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = KSF29ZC99W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		C00000000000000000000021 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				EXECUTABLE_NAME = awake;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Awake;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake;
+				PRODUCT_MODULE_NAME = awake;
+				PRODUCT_NAME = Awake;
+			};
+			name = Debug;
+		};
+		C00000000000000000000022 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				EXECUTABLE_NAME = awake;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Awake;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake;
+				PRODUCT_MODULE_NAME = awake;
+				PRODUCT_NAME = Awake;
+			};
+			name = Release;
+		};
+		C00000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CODE_SIGN_FLAGS = "$(inherited) --identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake.helper;
+				PRODUCT_NAME = "awake-helper";
+			};
+			name = Debug;
+		};
+		C00000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				OTHER_CODE_SIGN_FLAGS = "$(inherited) --identifier $(PRODUCT_BUNDLE_IDENTIFIER)";
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake.helper;
+				PRODUCT_NAME = "awake-helper";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C00000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000011 /* Debug */, C00000000000000000000012 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		C00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000021 /* Debug */, C00000000000000000000022 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		C00000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000031 /* Debug */, C00000000000000000000032 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}

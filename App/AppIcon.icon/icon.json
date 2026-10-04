@@ -1,0 +1,13 @@
+{
+  "fill": { "automatic-gradient": "srgb:0.77000,0.39000,0.12000,1.00000" },
+  "groups": [
+    {
+      "name": "Porcelain",
+      "layers": [
+        { "name": "Cup", "image-name": "cup.svg" },
+        { "name": "Saucer", "image-name": "saucer.svg" }
+      ]
+    }
+  ],
+  "supported-platforms": { "squares": ["macOS"] }
+}
