@@ -1,8 +1,10 @@
 import Foundation
 import IOKit
+import Synchronization
+import XPC
 
 /// The machine's power state, read without root, and the few privileged pmset commands the
-/// sudoers rule allows.
+/// signed helper allows.
 enum System {
     static func bootSession() -> String {
         var size = 0
@@ -59,11 +61,14 @@ enum System {
 
     /// Returns nil on success, otherwise what went wrong.
     static func setSleepDisabled(_ on: Bool) -> String? {
-        privilegedPmset(["-a", "disablesleep", on ? "1" : "0"])
+        privilegedPmset(PowerCommand(sleepDisabled: on))
     }
 
     static func setBatteryEnergyMode(_ mode: Int) -> String? {
-        privilegedPmset(["-b", "powermode", String(mode)])
+        guard let command = PowerCommand(batteryEnergyMode: mode) else {
+            return "the battery energy mode is invalid: choose 0, 1 or 2"
+        }
+        return privilegedPmset(command)
     }
 
     /// Asks for system sleep. Works without root for the logged-in user, but not while SleepDisabled is set.
@@ -71,14 +76,54 @@ enum System {
         _ = run("/usr/bin/pmset", ["sleepnow"])
     }
 
-    private static func privilegedPmset(_ args: [String]) -> String? {
-        let result = run("/usr/bin/sudo", ["-n", "/usr/bin/pmset"] + args)
-        if result.status == 0 { return nil }
-        if result.error.contains("password is required") || result.error.contains("not allowed") {
-            return "the sudo rule is missing: run mac-setup's scripts/admin.sh"
+    /// One authenticated request, with a bounded wait even in a hook process with no run loop.
+    private static func privilegedPmset(_ command: PowerCommand) -> String? {
+        let deadline = DispatchTime.now() + 10
+        let arrived = DispatchSemaphore(value: 0)
+        let answer = Mutex<PowerReply?>(nil)
+        let finish: @Sendable (PowerReply) -> Void = { reply in
+            let first = answer.withLock { value in
+                guard value == nil else { return false }
+                value = reply
+                return true
+            }
+            if first { arrived.signal() }
         }
-        let detail = result.error.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "pmset \(args.joined(separator: " ")) failed" + (detail.isEmpty ? "" : ": \(detail)")
+        do {
+            let session = try XPCSession(machService: Identity.helper, targetQueue: .global(qos: .utility),
+                                         options: .privileged,
+                                         requirement: .isFromSameTeam(andMatchesSigningIdentifier: Identity.helper),
+                                         cancellationHandler: { error in
+                                             finish(PowerReply(error: helperError(error)))
+                                         })
+            defer { session.cancel(reason: "power request finished") }
+            try session.send(PowerRequest(command: command)) { (result: Result<PowerReply, any Error>) in
+                switch result {
+                case .success(let reply):
+                    finish(PowerReply(error: reply.error.map { "\($0); open Awake and try again" }))
+                case .failure(let error):
+                    finish(PowerReply(error: helperError(error)))
+                }
+            }
+            guard arrived.wait(timeout: deadline) == .success else {
+                return "the helper didn't answer within 10 seconds: open Awake and try again"
+            }
+            return answer.withLock { $0?.error }
+        } catch {
+            return helperError(error)
+        }
+    }
+
+    private static func helperError(_ error: any Error) -> String {
+        // XPCRichError has no reason code. Only distinguish signing when XPC says so explicitly.
+        if let error = error as? XPCRichError,
+           error.debugDescription.lowercased().contains("code signing") {
+            return "the helper's signature couldn't be verified: reinstall Awake and open it to finish setup"
+        }
+        if error is DecodingError {
+            return "the helper sent an unreadable reply: reinstall Awake and open it to finish setup"
+        }
+        return "the helper couldn't be reached: open Awake to finish setup"
     }
 
     private static func property(_ service: io_service_t, _ key: String) -> Any? {

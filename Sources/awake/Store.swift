@@ -6,8 +6,8 @@ struct Status: Codable, Equatable, Sendable {
     var flag: Bool
     var error: String? = nil
     var guards = Guards()
-    /// When setting the flag or the energy mode last failed, so a missing sudo rule is retried once a
-    /// minute, not per hook. Each has its own time, so one failing doesn't hold up the other.
+    /// When setting the flag or the energy mode last failed, so a helper that isn't set up is retried
+    /// once a minute, not per hook. Each has its own time, so one failing doesn't hold up the other.
     var flagFailedAt: Double? = nil
     var energyFailedAt: Double? = nil
     /// When the last lid-closed line went to the log.
@@ -44,6 +44,15 @@ enum Store {
 
     static func status() -> Status? { read(Status.self, "status") }
     static func setStatus(_ status: Status) { write(status, "status") }
+
+    /// Forgets when setting the flag or the energy mode last failed, so the next reconcile tries
+    /// again at once instead of within a minute, as after the helper was allowed to run.
+    static func clearFailures() {
+        guard var status = status(), status.flagFailedAt != nil || status.energyFailedAt != nil else { return }
+        status.flagFailedAt = nil
+        status.energyFailedAt = nil
+        setStatus(status)
+    }
 
     static func savedEnergy() -> Int? { read(SavedEnergy.self, "energy")?.battery }
     static func saveEnergy(_ mode: Int) { write(SavedEnergy(battery: mode), "energy") }

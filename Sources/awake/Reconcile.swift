@@ -70,7 +70,7 @@ enum Reconcile {
         var flagFailedAt: Double? = nil, energyFailedAt: Double? = nil
         var loggedAt = previous?.loggedAt
         var released = false
-        // A missing sudo rule fails the same way every time: retry once a minute, not on every hook.
+        // A helper that isn't set up fails the same way every time: retry once a minute, not on every hook.
         func waiting(_ failedAt: Double?) -> Bool { failedAt.map { now - $0 < 60 } ?? false }
 
         if d.awake != flag {
