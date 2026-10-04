@@ -1,11 +1,13 @@
 import Foundation
 
 /// The names the app, its privileged helper and their launchd jobs go by. The helper's launchd
-/// label, Mach service and code signing identifier are all `helper`; the menu's launchd label is
-/// the app's bundle identifier.
+/// label, Mach service and code signing identifier are all `helper`. The menu's launchd label
+/// differs from the app's bundle identifier: macOS files a login item labelled like its app under
+/// the app itself and never starts it.
 enum Identity {
     static let app = "io.github.theyluvenething.awake"
     static let helper = "io.github.theyluvenething.awake.helper"
+    static let menu = "io.github.theyluvenething.awake.menu"
     static let reconcile = "io.github.theyluvenething.awake.reconcile"
 }
 

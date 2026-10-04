@@ -110,7 +110,7 @@ info="$app/Contents/Info.plist"
 [ -s "$app/Contents/Resources/Assets.car" ] || fail "missing compiled icon assets"
 for plist in \
   "LaunchDaemons/$app_id.helper.plist" \
-  "LaunchAgents/$app_id.plist" \
+  "LaunchAgents/$app_id.menu.plist" \
   "LaunchAgents/$app_id.reconcile.plist"; do
   plutil -lint "$app/Contents/Library/$plist"
   cmp -s "$here/App/$plist" "$app/Contents/Library/$plist" || fail "bundled $plist differs from its source"

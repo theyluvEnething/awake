@@ -49,7 +49,7 @@ enum SetupService: CaseIterable {
     @MainActor var service: SMAppService {
         switch self {
         case .helper: .daemon(plistName: Identity.helper + ".plist")
-        case .menu: .agent(plistName: Identity.app + ".plist")
+        case .menu: .agent(plistName: Identity.menu + ".plist")
         case .reconcile: .agent(plistName: Identity.reconcile + ".plist")
         }
     }

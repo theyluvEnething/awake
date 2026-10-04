@@ -37,7 +37,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: Identity.app)
             .filter { $0.processIdentifier != getpid() }
         if !others.isEmpty {
-            if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.app {
+            if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.menu {
                 DistributedNotificationCenter.default().postNotificationName(showSettings, object: nil, userInfo: nil,
                                                                              deliverImmediately: true)
             }
@@ -65,7 +65,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         refresh()
         reconcileInBackground()
         // launchd starts the menu at login without a window; opening the app by hand shows its settings.
-        if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.app {
+        if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.menu {
             openSettings()
         }
     }

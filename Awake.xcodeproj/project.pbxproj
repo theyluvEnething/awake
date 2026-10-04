@@ -10,7 +10,7 @@
 		B00000000000000000000002 /* HelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* HelperProtocol.swift */; };
 		B00000000000000000000003 /* awake-helper in Embed helper */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* awake-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		B00000000000000000000004 /* helper.plist in LaunchDaemons */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* helper.plist */; };
-		B00000000000000000000005 /* awake.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* awake.plist */; };
+		B00000000000000000000005 /* menu.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* menu.plist */; };
 		B00000000000000000000006 /* reconcile.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* reconcile.plist */; };
 /* End PBXBuildFile section */
 
@@ -49,7 +49,7 @@
 			dstPath = Contents/Library/LaunchAgents;
 			dstSubfolderSpec = 1;
 			files = (
-				B00000000000000000000005 /* awake.plist in LaunchAgents */,
+				B00000000000000000000005 /* menu.plist in LaunchAgents */,
 				B00000000000000000000006 /* reconcile.plist in LaunchAgents */,
 			);
 			name = LaunchAgents;
@@ -61,7 +61,7 @@
 		F00000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		F00000000000000000000002 /* HelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/awake/HelperProtocol.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000003 /* helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchDaemons/io.github.theyluvenething.awake.helper.plist; sourceTree = "<group>"; };
-		F00000000000000000000004 /* awake.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.plist; sourceTree = "<group>"; };
+		F00000000000000000000004 /* menu.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.menu.plist; sourceTree = "<group>"; };
 		F00000000000000000000005 /* reconcile.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.reconcile.plist; sourceTree = "<group>"; };
 		F00000000000000000000006 /* Awake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Awake.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000000000000000000007 /* awake-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "awake-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -102,7 +102,7 @@
 			children = (
 				F00000000000000000000001 /* AppIcon.icon */,
 				F00000000000000000000003 /* helper.plist */,
-				F00000000000000000000004 /* awake.plist */,
+				F00000000000000000000004 /* menu.plist */,
 				F00000000000000000000005 /* reconcile.plist */,
 			);
 			path = App;
