@@ -113,6 +113,39 @@ enum Format {
         + "\(Int(Policy.hot)) °C battery temperature and when the thermal state is "
         + "\(thermal(.serious).lowercased()) or \(thermal(.critical).lowercased())."
 
+    // MARK: Setup
+
+    static let setupPurpose = "Keeps your Mac running with the lid closed while Claude Code or Codex works."
+    static let setupLocation = "Move Awake.app to /Applications, then open it there. Hooks and the command line "
+        + "use /Applications/Awake.app, and macOS registers its helper and login items at that location. "
+        + "Setup cannot run from Downloads, a disk image or App Translocation."
+    static let setupHelper = "Runs as root. It can only turn lid sleep on or off and switch the battery energy mode. "
+        + "It turns lid sleep back on when your Mac starts. macOS asks you to allow it in System Settings."
+    static let setupHelperCommands = "pmset -a disablesleep 0|1\npmset -b powermode 0|1|2"
+    static let setupLoginItems = "The menu at login, plus a check every 30 seconds."
+    static let setupCodex = "Adds Awake's hooks beside your own in ~/.codex/hooks.json."
+    static let setupCodexTrust = "Trust the hooks once with /hooks in Codex."
+    static let setupCodexMissing = "Codex isn't installed"
+    static let setupCodexLater = "Open Awake again after installing Codex to add its hooks."
+    static let setupClaude = "Add the copied hooks to ~/.claude/settings.json. Awake never writes Claude Code settings."
+    static let setupClaudeManaged = "If managed settings control hooks, such as allowManagedHooksOnly, "
+        + "an administrator must add them to:"
+    static let setupClaudeManagedPath = "/Library/Application Support/ClaudeCode/managed-settings.json"
+
+    static let uninstallDescription = "Awake will turn Off, end every hold, restore lid sleep and your battery energy mode, "
+        + "remove its helper, two login items, Codex hooks, state and log, then move Awake.app to the Trash and quit.\n\n"
+        + "Claude Code hooks you added stay in your settings. They do nothing once the app is gone. "
+        + "If the app cannot be moved to the Trash, Finder will show it for you to remove."
+
+    static func uninstallRecovery(savedEnergy: Int?) -> String {
+        var text = "Lid sleep may still be off. Allow Awake's helper in System Settings and try again, "
+            + "or run this in Terminal with an administrator password:\n\nsudo pmset -a disablesleep 0"
+        if let savedEnergy, (0...2).contains(savedEnergy) {
+            text += "\n\nsudo pmset -b powermode \(savedEnergy)\n\nThe second command restores your battery energy mode."
+        }
+        return text
+    }
+
     // MARK: Text
 
     static func capitalized(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }

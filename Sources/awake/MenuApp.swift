@@ -1,6 +1,7 @@
 import AppKit
 import IOKit
 import IOKit.ps
+import ServiceManagement
 import SwiftUI
 
 /// kIOPMMessageClamshellStateChange, a C macro Swift can't import.
@@ -10,12 +11,18 @@ private let clamshellStateChange: UInt32 = 0xE003_4100
 /// and wakes for state changes, wake, lid, charger and thermal events, plus a loose 30-second refresh.
 @MainActor
 final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
-    static let jobLabel = "toybox.awake"
-    static let showSettings = Notification.Name("toybox.awake.show-settings")
+    static let showSettings = Notification.Name(Identity.app + ".show-settings")
 
     private var item: NSStatusItem!
     private let model = AwakeModel(snapshot: Snapshot.take())
     private var window: NSWindow?
+    private let paths = SetupPaths(app: Bundle.main.bundleURL, home: FileManager.default.homeDirectoryForCurrentUser)
+    private var setupModel: SetupModel?
+    private var setupTimer: Timer?
+    private var reconcileTask: Task<Void, Never>?
+    private var reconcilePending = false
+    private var retryHelperPending = false
+    private var uninstalling = false
     private var stateWatch: DispatchSourceFileSystemObject?
     private var refreshTimer: Timer?
     private var refreshPending = false
@@ -25,12 +32,15 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var powerSource: CFRunLoopSource?
 
     static func start() -> Never {
-        // Opened from Finder or Spotlight while the menu already runs: show its settings and leave.
-        let others = NSRunningApplication.runningApplications(withBundleIdentifier: jobLabel)
+        // A newly registered menu agent must leave an existing instance alone. A hand-opened app
+        // asks that instance to show setup or Settings, as Finder and Spotlight do.
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Identity.app)
             .filter { $0.processIdentifier != getpid() }
         if !others.isEmpty {
-            DistributedNotificationCenter.default().postNotificationName(showSettings, object: nil, userInfo: nil,
-                                                                         deliverImmediately: true)
+            if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.app {
+                DistributedNotificationCenter.default().postNotificationName(showSettings, object: nil, userInfo: nil,
+                                                                             deliverImmediately: true)
+            }
             exit(0)
         }
         let app = NSApplication.shared
@@ -46,7 +56,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
-        watchState()
+        if paths.atRequiredLocation { watchState() }
         watchSystem()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
@@ -55,7 +65,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         refresh()
         reconcileInBackground()
         // launchd starts the menu at login without a window; opening the app by hand shows its settings.
-        if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Self.jobLabel {
+        if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.app {
             openSettings()
         }
     }
@@ -81,6 +91,13 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.addItem(header)
         menu.addItem(.separator())
 
+        guard paths.atRequiredLocation else {
+            menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
+            menu.addItem(menuItem("Quit Awake", "xmark.rectangle", #selector(quit)))
+            return
+        }
+        guard !uninstalling else { return }
+
         let toggle = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
         toggle.state = s.decision.mode == .off ? .off : .on
         menu.addItem(toggle)
@@ -89,8 +106,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             menu.addItem(menuItem("Sleep Now", "sleep", #selector(sleepNow)))
         }
         menu.addItem(.separator())
+        if !Setup.snapshot(paths: paths).complete {
+            menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
+        }
         menu.addItem(menuItem("Settings…", "gear", #selector(openSettings)))
         menu.addItem(.separator())
+        menu.addItem(menuItem("Uninstall Awake…", "trash", #selector(uninstall)))
         menu.addItem(menuItem("Quit Awake", "xmark.rectangle", #selector(quit)))
     }
 
@@ -115,25 +136,23 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     /// Releases the flag for a minute so the Mac can sleep, then asks for sleep.
     @objc func sleepNow() {
+        guard !uninstalling && paths.atRequiredLocation else { return }
         change(sleepAfterRelease: false) { Store.release(until: Date().timeIntervalSince1970 + 60) }
         System.sleepNow()
     }
 
     @objc func openSettings() {
+        guard !uninstalling else { return }
+        guard Setup.snapshot(paths: paths).complete else {
+            openSetup()
+            return
+        }
+        if setupModel != nil { window?.close() }
         if window == nil {
             let view = SettingsView(model: model, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
                                     sleepNow: { [weak self] in self?.sleepNow() })
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-            window.title = "Awake"
-            window.styleMask = [.titled, .closable]
-            // The title bar shows the canvas, so the window is one surface as in AdBlock.
-            window.titlebarAppearsTransparent = true
-            window.backgroundColor = Palette.canvas
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            window.center()
-            self.window = window
+            window = makeWindow(view)
         }
         model.snapshot = Snapshot.take()
         NSApp.activate()
@@ -141,16 +160,194 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     func windowWillClose(_ notification: Notification) {
+        setupTimer?.invalidate()
+        setupTimer = nil
+        setupModel = nil
         window = nil
+    }
+
+    private func makeWindow<Content: View>(_ view: Content) -> NSWindow {
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = "Awake"
+        window.styleMask = [.titled, .closable]
+        // The title bar shows the canvas, so the window is one surface as in AdBlock.
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = Palette.canvas
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        return window
+    }
+
+    // MARK: Setup
+
+    @objc private func openSetup() {
+        guard !uninstalling else { return }
+        if setupModel == nil {
+            window?.close()
+            let setup = SetupModel(snapshot: Setup.snapshot(paths: paths))
+            setupModel = setup
+            let view = SetupView(model: setup, install: { [weak self] in self?.installSetup() },
+                                 openSystemSettings: { SMAppService.openSystemSettingsLoginItems() },
+                                 copyHooks: { [weak self] in self?.copyClaudeHooks() },
+                                 showInFinder: { [weak self] in
+                                     guard let self else { return }
+                                     NSWorkspace.shared.activateFileViewerSelecting([self.paths.app])
+                                 }, quit: { NSApp.terminate(nil) },
+                                 done: { [weak self] in self?.openSettings() })
+            window = makeWindow(view)
+            if paths.atRequiredLocation {
+                setupTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.refreshSetup() }
+                }
+            }
+        }
+        refreshSetup()
+        NSApp.activate()
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func installSetup() {
+        guard !uninstalling, paths.atRequiredLocation, let setup = setupModel, !setup.installing else { return }
+        setup.installing = true
+        setup.serviceErrors = [:]
+        setup.codexError = nil
+        Task { [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            for part in SetupService.allCases {
+                do { try Setup.register(part, app: paths.app) }
+                catch { setup.serviceErrors[part] = error.localizedDescription }
+                refreshSetup()
+            }
+            do { try SetupHooks.updateCodex(at: paths.codexHooks, binary: SetupPaths.binary, install: true) }
+            catch { setup.codexError = error.localizedDescription }
+            setup.installing = false
+            refreshSetup()
+        }
+    }
+
+    private func refreshSetup() {
+        guard !uninstalling, let setup = setupModel else { return }
+        let wasEnabled = setup.snapshot.helper == .enabled
+        setup.snapshot = Setup.snapshot(paths: paths)
+        if !wasEnabled && setup.snapshot.helper == .enabled {
+            reconcileInBackground(retryFailures: true)
+        }
+    }
+
+    private func copyClaudeHooks() {
+        guard let setup = setupModel else { return }
+        do {
+            let json = try SetupHooks.claudeJSON(binary: SetupPaths.binary)
+            NSPasteboard.general.clearContents()
+            setup.copied = NSPasteboard.general.setString(json, forType: .string)
+            setup.copyError = setup.copied ? nil : "Couldn't copy the hooks. Try again."
+        } catch {
+            setup.copyError = error.localizedDescription
+        }
+    }
+
+    // MARK: Uninstall
+
+    @objc private func uninstall() {
+        guard !uninstalling, paths.atRequiredLocation, setupModel?.installing != true else { return }
+        let confirm = NSAlert()
+        confirm.messageText = "Uninstall Awake?"
+        confirm.informativeText = Format.uninstallDescription
+        confirm.alertStyle = .warning
+        confirm.addButton(withTitle: "Uninstall")
+        confirm.addButton(withTitle: "Cancel")
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+        guard FileManager.default.isDeletableFile(atPath: paths.app.path) else {
+            showProblem("Awake can't move itself to the Trash", "Check the app's permissions in Finder, then try again.")
+            return
+        }
+        uninstalling = true
+        window?.close()
+        stateWatch?.cancel()
+        stateWatch = nil
+        Task { await performUninstall() }
+    }
+
+    private func performUninstall() async {
+        await reconcileTask?.value
+        let savedEnergy = Store.savedEnergy()
+        let status = Store.withLock {
+            Store.setMode(.off)
+            Store.leases().forEach { Store.removeLease($0.name) }
+            Store.queuedEvents().forEach { Store.removeEvent($0.file) }
+            Store.release(until: Date().timeIntervalSince1970 + 120)
+            Store.clearFailures()
+            return Reconcile.run(locked: true, sleepAfterRelease: false)
+        } ?? nil
+        if status == nil || status?.flag == true || status?.error != nil || Store.savedEnergy() != nil {
+            let alert = NSAlert()
+            alert.messageText = "Power settings could not be restored"
+            alert.informativeText = [status?.error, Format.uninstallRecovery(savedEnergy: savedEnergy)]
+                .compactMap { $0 }.joined(separator: "\n\n")
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Cancel Uninstall")
+            alert.addButton(withTitle: "Uninstall Anyway")
+            guard alert.runModal() == .alertSecondButtonReturn else {
+                resumeAfterUninstall()
+                return
+            }
+        }
+        do {
+            try await Setup.unregisterBackground(.reconcile, app: paths.app)
+            try await Setup.unregisterBackground(.helper, app: paths.app)
+            try SetupHooks.updateCodex(at: paths.codexHooks, binary: SetupPaths.binary, install: false)
+        } catch {
+            showProblem("Uninstall stopped", error.localizedDescription + "\n\nFix this, then choose Uninstall Awake again.")
+            resumeAfterUninstall()
+            return
+        }
+
+        // Restore power while the helper lives, stop writers, then remove files. The menu is last:
+        // unregistering our own launchd job sends SIGTERM, so ignore it for the remaining steps.
+        let previous = signal(SIGTERM, SIG_IGN)
+        do {
+            try Setup.unregisterMenu(app: paths.app)
+        } catch {
+            signal(SIGTERM, previous)
+            showProblem("The menu login item could not be removed", error.localizedDescription)
+            resumeAfterUninstall()
+            return
+        }
+        // Claude Code hooks call the app until it's in the Trash and would recreate its state, so
+        // the state goes after the app.
+        do { try Setup.trashApp(at: paths.app) }
+        catch { NSWorkspace.shared.activateFileViewerSelecting([paths.app]) }
+        try? Setup.removeUserFiles(paths: paths)
+        NSApp.terminate(nil)
+    }
+
+    private func resumeAfterUninstall() {
+        uninstalling = false
+        watchState()
+        refresh()
+        openSettings()
+    }
+
+    private func showProblem(_ title: String, _ detail: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = detail
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     /// Quit sets Off first, so nothing keeps the Mac running for agents once the menu is gone.
     @objc private func quit() {
+        guard !uninstalling else { return }
         change { Store.setMode(.off) }
         NSApp.terminate(nil)
     }
 
     private func change(sleepAfterRelease: Bool = true, _ edit: () -> Void) {
+        guard !uninstalling && paths.atRequiredLocation else { return }
         _ = Store.withLock(timeout: 2) {
             edit()
             return Reconcile.run(locked: true, sleepAfterRelease: sleepAfterRelease)
@@ -179,7 +376,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return Format.capitalized(Format.lidEffect(s.flag))
     }
 
-    /// The sudo rule is missing, or the flag has differed from awake's decision for a few seconds.
+    /// The helper is unavailable, or the flag has differed from awake's decision for a few seconds.
     private func warning(_ s: Snapshot) -> String? {
         if let error = s.status?.error { return Format.capitalized(error) }
         guard let status = s.status, status.awake != s.flag else {
@@ -197,10 +394,30 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return Format.capitalized(Format.changedOutside(flag: s.flag))
     }
 
-    private func reconcileInBackground() {
-        Task.detached(priority: .utility) { [weak self] in
-            Reconcile.run()
-            await self?.refresh()
+    private func reconcileInBackground(retryFailures: Bool = false) {
+        guard !uninstalling && paths.atRequiredLocation else { return }
+        guard reconcileTask == nil else {
+            reconcilePending = true
+            retryHelperPending = retryHelperPending || retryFailures
+            return
+        }
+        reconcileTask = Task { [weak self] in
+            let status = await Task.detached(priority: .utility) {
+                if retryFailures {
+                    return Store.withLock { Store.clearFailures(); return Reconcile.run(locked: true) } ?? nil
+                }
+                return Reconcile.run()
+            }.value
+            guard let self else { return }
+            reconcileTask = nil
+            setupModel?.powerError = status?.error
+            refresh()
+            if reconcilePending {
+                let retry = retryHelperPending
+                reconcilePending = false
+                retryHelperPending = false
+                reconcileInBackground(retryFailures: retry)
+            }
         }
     }
 
@@ -275,6 +492,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// Logout, restart or shutdown: Stay awake indefinitely ends, lid sleep comes back on and so does
     /// the energy mode.
     private func loggingOut() {
+        guard !uninstalling && paths.atRequiredLocation else { return }
         _ = Store.withLock(timeout: 2) {
             Store.endOn()
             Store.release(until: Date().timeIntervalSince1970 + 120)

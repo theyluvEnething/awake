@@ -98,7 +98,7 @@ enum Palette {
 
 /// Rows on a flat surface with a hairline border and hairlines between them, with an optional label
 /// above and note below.
-private struct Panel<Content: View>: View {
+struct Panel<Content: View>: View {
     let label: String?
     let note: String?
     @ViewBuilder let content: Content
@@ -143,7 +143,7 @@ private struct Panel<Content: View>: View {
 }
 
 /// A title with an optional detail under it and an optional value at the trailing edge.
-private struct Row: View {
+struct Row: View {
     let title: String
     var detail: String? = nil
     var value: String? = nil
