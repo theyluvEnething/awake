@@ -129,6 +129,13 @@ struct SetupView: View {
             serviceStatus("Helper", part: .helper, status: model.snapshot.helper)
             serviceStatus("Menu at login", part: .menu, status: model.snapshot.menu)
             serviceStatus("30-second check", part: .reconcile, status: model.snapshot.reconcile)
+            // One switch in System Settings allows all three.
+            if model.snapshot.needsApproval {
+                HStack(spacing: 12) {
+                    Button("Open System Settings", action: openSystemSettings)
+                    Text(Format.setupApproval)
+                }
+            }
             codexStatus
             if let error = model.powerError { problem(error) }
         }
@@ -146,19 +153,14 @@ struct SetupView: View {
             case .enabled:
                 Label(title + (part == .helper ? ": allowed" : ": enabled"), systemImage: "checkmark.circle")
             case .requiresApproval:
-                HStack(spacing: 12) {
-                    Label {
-                        Text(title + ": waiting for approval")
-                    } icon: {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    }
-                    Button("Open System Settings", action: openSystemSettings)
-                        .controlSize(.small)
+                Label {
+                    Text(title + ": waiting for approval")
+                } icon: {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
                 }
-            case .notRegistered:
+            // macOS 26 reports an item it has never registered as notFound.
+            case .notRegistered, .notFound:
                 Label(title + ": not set up", systemImage: "circle")
-            case .notFound:
-                Label(title + ": not found in this app", systemImage: "exclamationmark.triangle")
             @unknown default:
                 Label(title + ": status unavailable", systemImage: "questionmark.circle")
             }

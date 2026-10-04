@@ -130,6 +130,7 @@ enum Format {
         + "It turns lid sleep back on when your Mac starts. macOS asks you to allow it in System Settings."
     static let setupHelperCommands = "pmset -a disablesleep 0|1\npmset -b powermode 0|1|2"
     static let setupLoginItems = "The menu at login, plus a check every 30 seconds."
+    static let setupApproval = "Switch on Awake under Allow in the Background."
     static let setupCodex = "Adds Awake's hooks beside your own in ~/.codex/hooks.json."
     static let setupCodexTrust = "Trust the hooks once with /hooks in Codex."
     static let setupCodexMissing = "Codex isn't installed"
