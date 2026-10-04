@@ -29,10 +29,15 @@ enum System {
         defer { IOObjectRelease(service) }
         guard let current = property(service, "CurrentCapacity") as? Int,
               let max = property(service, "MaxCapacity") as? Int, max > 0 else { return nil }
+        let millivolts = property(service, "Voltage") as? Int
+        let milliamps = property(service, "InstantAmperage") as? Int
         return Battery(level: current * 100 / max,
                        charging: property(service, "IsCharging") as? Bool ?? false,
                        external: property(service, "ExternalConnected") as? Bool ?? false,
-                       temperature: (property(service, "Temperature") as? Int).map { Double($0) / 100 })
+                       temperature: (property(service, "Temperature") as? Int).map { Double($0) / 100 },
+                       rawCharge: property(service, "AppleRawCurrentCapacity") as? Int,
+                       rawMax: property(service, "AppleRawMaxCapacity") as? Int,
+                       watts: millivolts.flatMap { v in milliamps.map { Double(v) * Double($0) / 1_000_000 } })
     }
 
     static func thermal() -> Thermal {

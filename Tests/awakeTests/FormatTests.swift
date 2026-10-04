@@ -25,4 +25,15 @@ private let now = 1_790_000_000.0
     func holdLabels(hold: Hold, text: String) {
         #expect(Format.hold(hold, now: now) == text)
     }
+
+    @Test(arguments: [
+        (Battery(level: 80, charging: false, external: false, temperature: 30, rawCharge: 4612, rawMax: 6008,
+                 watts: -9.84), "raw 4612/6008 mAh, -9.8 W"),
+        (Battery(level: 15, charging: true, external: true, temperature: 30, rawCharge: 842, rawMax: 6008,
+                 watts: 55.9), "raw 842/6008 mAh, +55.9 W"),
+        (Battery(level: 15, charging: true, external: true, temperature: 30), nil),
+    ] as [(Battery, String?)])
+    func rawBatteryForTheLog(battery: Battery, text: String?) {
+        #expect(Format.batteryRaw(battery) == text)
+    }
 }

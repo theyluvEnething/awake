@@ -171,10 +171,14 @@ enum Reconcile {
         return elsewhere ? "\(text), after \(Format.changedOutside(flag: s.flag))" : text
     }
 
-    /// "lid closed, 80 %, on battery, 29.8 °C", plus the thermal state when it isn't normal.
+    /// "lid closed, 80 %, on battery, 29.8 °C, raw 4612/6008 mAh, -9.8 W", plus the thermal state when
+    /// it isn't normal.
     private static func conditions(_ s: Snapshot) -> String {
         var parts = [s.lidClosed ? "lid closed" : "lid open"]
-        if let b = s.inputs.battery { parts.append(Format.battery(b)) }
+        if let b = s.inputs.battery {
+            parts.append(Format.battery(b))
+            if let raw = Format.batteryRaw(b) { parts.append(raw) }
+        }
         if s.inputs.thermal != .nominal { parts.append(Format.thermalState(s.inputs.thermal)) }
         return parts.joined(separator: ", ")
     }

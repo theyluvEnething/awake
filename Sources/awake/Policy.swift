@@ -90,6 +90,12 @@ struct Battery: Equatable, Sendable {
     var external: Bool
     /// Degrees Celsius.
     var temperature: Double?
+    /// The battery's own charge and capacity in mAh, for the log: the percentage can sit still near a
+    /// charge limit while the charge underneath falls.
+    var rawCharge: Int? = nil
+    var rawMax: Int? = nil
+    /// Battery power in watts, negative while discharging.
+    var watts: Double? = nil
 }
 
 enum Thermal: Int, Comparable, Sendable {
