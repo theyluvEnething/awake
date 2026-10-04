@@ -8,7 +8,7 @@ import SwiftUI
 private let clamshellStateChange: UInt32 = 0xE003_4100
 
 /// The menu bar app: `awake` without arguments, as launchd starts it from Awake.app. It sits idle
-/// and wakes for state changes, wake, lid, charger and thermal events, plus a loose 30-second refresh.
+/// and wakes for state changes, wake, lid, charger and thermal events, plus a loose 30-second reconcile.
 @MainActor
 final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     static let showSettings = Notification.Name(Identity.app + ".show-settings")
@@ -58,8 +58,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         item.menu = menu
         if paths.atRequiredLocation { watchState() }
         watchSystem()
+        // Also reconciles, so a hold ends on time even while launchd holds back the 30-second check.
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated {
+                self?.refresh()
+                self?.reconcileInBackground()
+            }
         }
         refreshTimer?.tolerance = 10
         refresh()
@@ -258,7 +262,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         confirm.alertStyle = .warning
         confirm.addButton(withTitle: "Uninstall")
         confirm.addButton(withTitle: "Cancel")
-        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+        guard runAlert(confirm) == .alertFirstButtonReturn else { return }
         guard FileManager.default.isDeletableFile(atPath: paths.app.path) else {
             showProblem("Awake can't move itself to the Trash", "Check the app's permissions in Finder, then try again.")
             return
@@ -289,7 +293,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Cancel Uninstall")
             alert.addButton(withTitle: "Uninstall Anyway")
-            guard alert.runModal() == .alertSecondButtonReturn else {
+            guard runAlert(alert) == .alertSecondButtonReturn else {
                 resumeAfterUninstall()
                 return
             }
@@ -336,7 +340,14 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         alert.informativeText = detail
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        runAlert(alert)
+    }
+
+    /// The menu runs while another app is active, so an alert would open behind its windows.
+    @discardableResult
+    private func runAlert(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        NSApp.activate()
+        return alert.runModal()
     }
 
     /// Quit sets Off first, so nothing keeps the Mac running for agents once the menu is gone.
