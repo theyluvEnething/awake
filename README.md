@@ -81,7 +81,7 @@ those requirements. Notarization is separate from App Review.
 
 ## Build and release
 
-Use Xcode 26 or later with Swift 6.2 or later and a macOS 26 SDK.
+Use Xcode 27 or later with Swift 6.4 or later. The app targets macOS 26.
 
 ```sh
 swift test --package-path . --scratch-path build
