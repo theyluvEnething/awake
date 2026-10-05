@@ -30,7 +30,7 @@ case "$#:${1:-}" in
 esac
 [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || fail "AWAKE_TEAM_ID must be a ten-character team ID"
 if ! "$skip_notarize"; then
-  for tool in generate_keys generate_appcast sign_update; do
+  for tool in generate_keys sign_update; do
     [ -x "$sparkle_bin/$tool" ] || fail "set AWAKE_SPARKLE_BIN to Sparkle 2.10.0's bin directory"
   done
   update_key="$("$sparkle_bin/generate_keys" --account "$update_account" -p)"
@@ -75,6 +75,7 @@ xcodebuild -project "$project" -target Awake -configuration Release -showBuildSe
 version="$(plutil -extract 0.buildSettings.MARKETING_VERSION raw -o - "$dist/build-settings.json")"
 build="$(plutil -extract 0.buildSettings.CURRENT_PROJECT_VERSION raw -o - "$dist/build-settings.json")"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "invalid MARKETING_VERSION: $version"
+[[ "$build" =~ ^[1-9][0-9]*$ ]] || fail "invalid CURRENT_PROJECT_VERSION: $build"
 
 xcodebuild -project "$project" -scheme Awake -configuration Release \
   -destination 'generic/platform=macOS' -derivedDataPath "$derived" \
@@ -248,16 +249,37 @@ end
 EOF
 echo "cask: $dist/awake.rb"
 
-mkdir "$dist/updates"
-cp "$dist/Awake-$version.zip" "$dist/updates/"
-"$sparkle_bin/generate_appcast" --account "$update_account" --maximum-deltas 0 \
-  --download-url-prefix "https://github.com/theyluvEnething/awake/releases/download/v$version/" \
-  --link "https://github.com/theyluvEnething/awake/releases/latest" \
-  -o "$dist/appcast.xml" "$dist/updates"
+# Publish a single full update, signed by Sparkle's existing Keychain signer.
+signature="$("$sparkle_bin/sign_update" --account "$update_account" -p "$archive")"
+[[ "$signature" =~ ^[A-Za-z0-9+/]{86}==$ ]] || fail "invalid update signature"
+length="$(stat -f '%z' "$archive")"
+minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
+[[ "$minimum" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail "invalid minimum system version: $minimum"
+published="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S %z')"
+cat > "$dist/appcast.xml" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Awake</title>
+    <link>https://github.com/theyluvEnething/awake/releases/latest</link>
+    <description>Awake updates</description>
+    <language>en</language>
+    <item>
+      <title>Awake $version</title>
+      <pubDate>$published</pubDate>
+      <sparkle:version>$build</sparkle:version>
+      <sparkle:shortVersionString>$version</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>$minimum</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/theyluvEnething/awake/releases/download/v$version/Awake-$version.zip" length="$length" type="application/octet-stream" sparkle:edSignature="$signature"/>
+    </item>
+  </channel>
+</rss>
+EOF
+xmllint --noout "$dist/appcast.xml"
+"$sparkle_bin/sign_update" --account "$update_account" "$dist/appcast.xml"
 "$sparkle_bin/sign_update" --account "$update_account" --verify "$dist/appcast.xml"
 signature="$(xmllint --xpath 'string(//enclosure/@*[local-name()="edSignature"])' "$dist/appcast.xml")"
-"$sparkle_bin/sign_update" --account "$update_account" --verify "$dist/Awake-$version.zip" "$signature"
-rm -rf "$dist/updates"
+"$sparkle_bin/sign_update" --account "$update_account" --verify "$archive" "$signature"
 (
   cd "$dist"
   shasum -a 256 "Awake-$version.dmg" "Awake-$version.zip" appcast.xml awake.rb > SHA256SUMS
