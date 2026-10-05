@@ -132,12 +132,60 @@ private func withHooksFile(_ body: (URL) throws -> Void) throws {
         #expect(NSDictionary(dictionary: merged).isEqual(to: expected))
     }
 
+    @Test(arguments: [true, false])
+    func keepsUnrelatedHandlersInMixedGroups(install: Bool) throws {
+        let document = try object("""
+            {"other": 42, "hooks": {"PreToolUse": [
+              {"matcher": "Write", "timeout": 12, "hooks": [
+                {"type": "command", "command": "echo before", "async": false},
+                {"type": "command", "command": "\(codexCommand)"},
+                {"type": "prompt", "prompt": "keep me"},
+                {"type": "command", "command": "exec ~/Applications/Awake.app/Contents/MacOS/awake hook codex"},
+                {"type": "command", "command": "echo after", "timeout": 7}
+              ]}
+            ]}}
+            """)
+        let merged = try #require(try SetupHooks.mergeCodex(document, binary: binary, install: install))
+        let hooks = try #require(merged["hooks"] as? [String: [[String: Any]]])
+        let groups = try #require(hooks["PreToolUse"])
+        #expect(groups.count == (install ? 2 : 1))
+        let kept = try #require(groups.last)
+        let expected = try object("""
+            {"matcher": "Write", "timeout": 12, "hooks": [
+              {"type": "command", "command": "echo before", "async": false},
+              {"type": "prompt", "prompt": "keep me"},
+              {"type": "command", "command": "echo after", "timeout": 7}
+            ]}
+            """)
+        #expect(NSDictionary(dictionary: kept).isEqual(to: expected))
+        #expect(merged["other"] as? Int == 42)
+        if install {
+            #expect(groups.first?["matcher"] as? String == "*")
+            let handlers = try #require(groups.first?["hooks"] as? [[String: Any]])
+            #expect(handlers.first?["command"] as? String == codexCommand)
+            let again = try #require(try SetupHooks.mergeCodex(merged, binary: binary, install: true))
+            #expect(NSDictionary(dictionary: again).isEqual(to: merged))
+        }
+    }
+
     @Test func uninstallKeepsTopLevelKeysEvenWhenNoHooksRemain() throws {
         let document = try object("""
             {"version": 1, "hooks": {"Stop": [{"hooks": [{"command": "\(codexCommand)"}]}]}}
             """)
         let merged = try #require(try SetupHooks.mergeCodex(document, binary: binary, install: false))
         #expect(NSDictionary(dictionary: merged).isEqual(to: ["version": 1, "hooks": [:]]))
+    }
+
+    @Test(arguments: [
+        "echo /Applications/Awake.app/Contents/MacOS/awake",
+        "/usr/local/bin/backup /Applications/Awake.app/Contents/MacOS/awake",
+        "exec /Applications/OtherAwake.app/Contents/MacOS/awake hook codex",
+        "/Applications/Awake.app/Contents/MacOS/awake status",
+    ])
+    func keepsCommandsThatOnlyMentionAwake(command: String) throws {
+        let document: [String: Any] = ["hooks": ["Stop": [["hooks": [["type": "command", "command": command]]]]]]
+        let merged = try #require(try SetupHooks.mergeCodex(document, binary: binary, install: false))
+        #expect(NSDictionary(dictionary: merged).isEqual(to: document))
     }
 
     @Test func fileInstallAndUninstallLeaveNothingWhenOnlyAwakeWasPresent() throws {
@@ -172,6 +220,22 @@ private func withHooksFile(_ body: (URL) throws -> Void) throws {
             #expect(try FileManager.default.destinationOfSymbolicLink(atPath: file.path) == linked.path)
             #expect(try SetupHooks.codexInstalled(at: linked, binary: binary))
             #expect(try FileManager.default.attributesOfItem(atPath: linked.path)[.posixPermissions] as? Int == 0o600)
+        }
+    }
+
+    @Test func uninstallKeepsTheSymlinkAndRemovesHooksFromItsTarget() throws {
+        try withHooksFile { file in
+            let linked = file.deletingLastPathComponent().appending(path: "dotfiles-hooks.json")
+            try Data("{\"hooks\":{}}".utf8).write(to: linked)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: linked.path)
+            try FileManager.default.createSymbolicLink(at: file, withDestinationURL: linked)
+            _ = try SetupHooks.updateCodex(at: file, binary: binary, install: true)
+            #expect(try SetupHooks.updateCodex(at: file, binary: binary, install: false) == .written)
+            #expect(try FileManager.default.destinationOfSymbolicLink(atPath: file.path) == linked.path)
+            let document = try object(String(contentsOf: linked, encoding: .utf8))
+            #expect(NSDictionary(dictionary: document).isEqual(to: ["hooks": [:]]))
+            #expect(try FileManager.default.attributesOfItem(atPath: linked.path)[.posixPermissions] as? Int == 0o600)
+            #expect(try SetupHooks.updateCodex(at: file, binary: binary, install: false) == .unchanged)
         }
     }
 

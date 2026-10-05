@@ -12,8 +12,9 @@ enum SetupHooks {
         var errorDescription: String? { "hooks.json must contain an object with hook events and groups" }
     }
 
-    /// Replaces Awake's groups at the first old group's position, including an old ~/Applications
-    /// command. Codex's trust depends on a group's position as well as its definition.
+    /// Replaces Awake's handlers at the first old group's position, including an old ~/Applications
+    /// command. Other handlers and their group metadata stay intact. Codex's trust depends on a
+    /// group's position as well as its definition.
     static func mergeCodex(_ document: [String: Any], binary: String, install: Bool) throws -> [String: Any]? {
         var document = document
         guard var hooks = (document["hooks"] ?? [String: Any]()) as? [String: Any] else {
@@ -24,10 +25,25 @@ enum SetupHooks {
             guard let original = (hooks[event] ?? [[String: Any]]()) as? [[String: Any]] else {
                 throw InvalidDocument.structure
             }
-            let owned = try original.map(ours)
-            let position = owned.firstIndex(of: true) ?? original.count
-            var kept = zip(original, owned).compactMap { group, ours in ours ? nil : group }
-            if let group = wanted[event] { kept.insert(group, at: min(position, kept.count)) }
+            var position: Int?
+            var kept: [[String: Any]] = []
+            for group in original {
+                guard let handlers = (group["hooks"] ?? [[String: Any]]()) as? [[String: Any]] else {
+                    throw InvalidDocument.structure
+                }
+                let remaining = try handlers.filter { try !ours($0, binary: binary) }
+                if remaining.count == handlers.count {
+                    kept.append(group)
+                } else {
+                    if position == nil { position = kept.count }
+                    if !remaining.isEmpty {
+                        var group = group
+                        group["hooks"] = remaining
+                        kept.append(group)
+                    }
+                }
+            }
+            if let group = wanted[event] { kept.insert(group, at: position ?? kept.count) }
             if kept.isEmpty {
                 hooks.removeValue(forKey: event)
             } else {
@@ -49,12 +65,15 @@ enum SetupHooks {
         }
         // Read and write the file a symlink points to, as dotfile managers link this file, and
         // resolve it once so both touch the same file.
+        let linked = (try? FileManager.default.destinationOfSymbolicLink(atPath: file.path)) != nil
         let target = file.resolvingSymlinksInPath()
         let original = try read(at: target)
-        let merged = try mergeCodex(original ?? [:], binary: binary, install: install)
+        var merged = try mergeCodex(original ?? [:], binary: binary, install: install)
+        // Removing our last hook must leave the user's dotfile link and its target in place.
+        if merged == nil && linked { merged = ["hooks": [String: Any]()] }
         guard let merged else {
             guard original != nil else { return .unchanged }
-            try FileManager.default.removeItem(at: file)
+            try FileManager.default.removeItem(at: target)
             return .removed
         }
         // NSDictionary equates JSON true with 1. Encoded values preserve that distinction.
@@ -95,16 +114,19 @@ enum SetupHooks {
         })
     }
 
-    private static func ours(_ group: [String: Any]) throws -> Bool {
-        guard let handlers = (group["hooks"] ?? [[String: Any]]()) as? [[String: Any]] else {
-            throw InvalidDocument.structure
-        }
-        var owned = false
-        for handler in handlers {
-            guard let command = (handler["command"] ?? "") as? String else { throw InvalidDocument.structure }
-            if command.contains("Awake.app/Contents/MacOS/awake") { owned = true }
-        }
-        return owned
+    private static func ours(_ handler: [String: Any], binary: String) throws -> Bool {
+        guard let command = (handler["command"] ?? "") as? String else { throw InvalidDocument.structure }
+        guard handler["type"] == nil || handler["type"] as? String == "command" else { return false }
+        let legacy = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Applications/Awake.app/Contents/MacOS/awake").path
+        return [binary, legacy, "~/Applications/Awake.app/Contents/MacOS/awake", "Awake.app/Contents/MacOS/awake"]
+            .contains { path in
+                let forms = path.hasPrefix("~/") ? [path, quote(path)] : [quote(path)]
+                return forms.contains { q in
+                    command == q || command == "\(q) hook codex" || command == "exec \(q) hook codex"
+                        || command == "[ -x \(q) ] && exec \(q) hook codex; exit 0"
+                }
+            }
     }
 
     /// The ASCII safe set and single-quote escaping used by Python's shlex.quote.
