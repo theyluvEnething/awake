@@ -70,10 +70,26 @@ enum Reconcile {
         var flagFailedAt: Double? = nil, energyFailedAt: Double? = nil
         var loggedAt = previous?.loggedAt
         var released = false
+        var pendingSleep = previous?.pendingSleep
+        if d.awake {
+            pendingSleep = nil
+        } else if !sleepAfterRelease && pendingSleep != nil {
+            pendingSleep = false
+        }
+        // pmset can finish before powerd updates the kernel flag. Complete that release on a
+        // later read, keeping uninstall/logout's suppression across retries too.
+        if !flag, !d.awake, let intent = pendingSleep {
+            if previous?.flag == true {
+                Store.log("lid sleep on   \(reason(d, s, elsewhere: false))  (\(conditions(s)))")
+            }
+            released = intent
+            pendingSleep = nil
+        }
         // A helper that isn't set up fails the same way every time: retry once a minute, not on every hook.
         func waiting(_ failedAt: Double?) -> Bool { failedAt.map { now - $0 < 60 } ?? false }
 
         if d.awake != flag {
+            if !d.awake && pendingSleep == nil { pendingSleep = sleepAfterRelease }
             if waiting(previous?.flagFailedAt) {
                 error = previous?.error
                 flagFailedAt = previous?.flagFailedAt
@@ -87,7 +103,8 @@ enum Reconcile {
                     let elsewhere = previous.map { $0.flag != flag } ?? false
                     let state = Format.lidSleep(after).lowercased().padding(toLength: 3, withPad: " ", startingAt: 0)
                     Store.log("lid sleep \(state)  \(reason(d, s, elsewhere: elsewhere))  (\(conditions(s)))")
-                    released = flag && !after
+                    released = flag && !after && pendingSleep == true
+                    if !after { pendingSleep = nil }
                     if after { loggedAt = now }
                     flag = after
                 }
@@ -136,7 +153,7 @@ enum Reconcile {
 
         // macOS decides about sleep when the lid closes, so releasing the flag with the lid already
         // closed leaves the Mac running. Put it to sleep instead.
-        if released && s.lidClosed && sleepAfterRelease {
+        if released && !d.awake && !flag && s.lidClosed && sleepAfterRelease {
             Store.log("going to sleep  (lid closed)")
             System.sleepNow()
         }
@@ -153,7 +170,7 @@ enum Reconcile {
             loggedAt = nil
         }
 
-        let status = Status(awake: d.awake, flag: flag, error: error, guards: d.guards, flagFailedAt: flagFailedAt,
+        let status = Status(awake: d.awake, flag: flag, error: error, guards: d.guards, pendingSleep: pendingSleep, flagFailedAt: flagFailedAt,
                             energyFailedAt: energyFailedAt, loggedAt: loggedAt)
         if status != previous { Store.setStatus(status) }
         return status

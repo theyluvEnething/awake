@@ -6,6 +6,9 @@ struct Status: Codable, Equatable, Sendable {
     var flag: Bool
     var error: String? = nil
     var guards = Guards()
+    /// An off request awaiting the kernel flag: true requests sleep, false suppresses it for
+    /// uninstall or logout, and nil means no release is pending.
+    var pendingSleep: Bool? = nil
     /// When setting the flag or the energy mode last failed, so a helper that isn't set up is retried
     /// once a minute, not per hook. Each has its own time, so one failing doesn't hold up the other.
     var flagFailedAt: Double? = nil
