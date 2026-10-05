@@ -42,7 +42,7 @@ fi
 
 echo "commit: $(git -C "$here" rev-parse HEAD)"
 if [ -n "$(git -C "$here" status --porcelain -- .)" ]; then
-  echo "warning: macos/awake has uncommitted changes" >&2
+  echo "warning: Awake has uncommitted changes" >&2
 fi
 if "$skip_notarize"; then
   echo "notarization and stapling skipped; this build is not a public release"
@@ -195,10 +195,10 @@ cask "awake" do
   version "$version"
   sha256 "$sha"
 
-  url "https://github.com/theyluvEnething/toybox/releases/download/awake-v#{version}/Awake-#{version}.dmg"
+  url "https://github.com/theyluvEnething/awake/releases/download/v#{version}/Awake-#{version}.dmg"
   name "Awake"
   desc "Keep your Mac awake while Claude Code or Codex works"
-  homepage "https://github.com/theyluvEnething/toybox"
+  homepage "https://github.com/theyluvEnething/awake"
 
   depends_on macos: ">= :tahoe"
 

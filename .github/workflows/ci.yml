@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Validate packaging inputs
+        run: |
+          bash -n release.sh
+          sh -n bin/awake
+          plutil -lint Awake.xcodeproj/project.pbxproj App/LaunchAgents/*.plist App/LaunchDaemons/*.plist
+      - name: Test
+        run: swift test --package-path . --scratch-path build
+      - name: Build universal app and helper
+        run: >-
+          xcodebuild -project Awake.xcodeproj -scheme Awake -configuration Release
+          -destination 'generic/platform=macOS' -derivedDataPath build/Xcode
+          CODE_SIGNING_ALLOWED=NO build

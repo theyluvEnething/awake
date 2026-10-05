@@ -1,0 +1,3 @@
+#!/bin/sh
+# awake's command line is the binary inside the app bundle installed from its DMG.
+exec /Applications/Awake.app/Contents/MacOS/awake "$@"
