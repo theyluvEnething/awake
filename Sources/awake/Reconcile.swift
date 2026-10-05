@@ -107,7 +107,9 @@ enum Reconcile {
                 case .lower(let saved):
                     Store.saveEnergy(saved)
                     if let problem = System.setBatteryEnergyMode(Policy.lowPower) {
-                        Store.forgetEnergy()
+                        // The helper may have applied the change before its reply was lost. Keep
+                        // the original mode unless a fresh read proves it is still unchanged.
+                        if System.batteryEnergyMode() == saved { Store.forgetEnergy() }
                         error = problem
                         energyFailedAt = now
                     } else {
