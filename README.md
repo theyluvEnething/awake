@@ -18,8 +18,12 @@ Code's hooks are copied for you to add to `~/.claude/settings.json`, or to
 `/Library/Application Support/ClaudeCode/managed-settings.json` when managed
 settings allow only managed hooks. The latter requires an administrator.
 
-Updates use the same installation steps. Quit the running menu app before
-replacing `/Applications/Awake.app`; your settings and hooks stay in place.
+Awake checks for updates after launch and every six hours. Automatic updates
+download quietly and install when you quit; Settings also offers **Restart to
+update**. Turn off **Automatic updates** to use only **Check for updates**.
+The version and check result appear in Settings. Updates verify both the signed
+feed and archive before installation. Your settings and hooks stay in place.
+For a manual download, quit the menu app before replacing `/Applications/Awake.app`.
 **Uninstall Awake…** in the menu restores lid sleep, removes the helper, login
 items, Codex hooks, state and log, then moves the app to the Trash.
 
@@ -39,7 +43,7 @@ or its helper needs setup.
 - **Settings…** shows the active holds, battery, thermal state and Low Power.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out.
-- **Keep display on** in Settings prevents idle screen dimming and display sleep,
+- **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
   including while the lid mode is Off. It has no timer: turn it off or quit Awake
   to restore normal display sleep.
 
@@ -95,12 +99,16 @@ xcodebuild -project Awake.xcodeproj -scheme Awake -configuration Release \
 
 `./release.sh` builds both universal binaries, checks their signatures and
 bundled resources, notarizes and staples the app, then creates and verifies a
-signed, notarized DMG. Outputs are in `dist/`, including a Homebrew cask with
-the release URL and checksum. It replaces that output directory on each run.
+signed, notarized DMG. Outputs are in `dist/`, including the stapled app's update
+ZIP, signed `appcast.xml`, Homebrew cask and `SHA256SUMS`. Publish all four assets
+and the checksums on the same GitHub release. It replaces that output directory on each run.
 
 The script uses the keychain's Developer ID Application identity for team
 `KSF29ZC99W` and the notarytool keychain profile `notary`.
 `AWAKE_TEAM_ID`, `AWAKE_SIGN_IDENTITY` and `AWAKE_NOTARY_PROFILE` override these.
+Set `AWAKE_SPARKLE_BIN` to the official Sparkle 2.10.0 release's `bin` directory.
+The update-signing key lives in Keychain under account `io.github.theyluvenething.awake`;
+`AWAKE_UPDATE_KEY_ACCOUNT` overrides the account. The script rejects a mismatched key.
 `./release.sh --skip-notarize` makes a clearly named check build without a cask.
 
 Awake was extracted from [toybox](https://github.com/theyluvEnething/toybox),

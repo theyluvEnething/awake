@@ -16,6 +16,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var item: NSStatusItem!
     private let model = AwakeModel(snapshot: Snapshot.take())
     private let display = DisplaySleep()
+    private let updates = UpdateController()
     private var window: NSWindow?
     private let paths = SetupPaths(app: Bundle.main.bundleURL, home: FileManager.default.homeDirectoryForCurrentUser)
     private var setupModel: SetupModel?
@@ -24,6 +25,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var reconcilePending = false
     private var retryHelperPending = false
     private var uninstalling = false
+    private var restartingForUpdate = false
     private var stateWatch: DispatchSourceFileSystemObject?
     private var refreshTimer: Timer?
     private var refreshPending = false
@@ -55,6 +57,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     func applicationDidFinishLaunching(_ notification: Notification) {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let menu = NSMenu()
+        menu.autoenablesItems = false
         menu.delegate = self
         item.menu = menu
         if paths.atRequiredLocation { watchState() }
@@ -69,6 +72,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         refreshTimer?.tolerance = 10
         refresh()
         reconcileInBackground()
+        if paths.atRequiredLocation { updates.start() }
         // launchd starts the menu at login without a window; opening the app by hand shows its settings.
         if ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] != Identity.menu {
             openSettings()
@@ -81,8 +85,20 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
+        if paths.atRequiredLocation && !uninstalling && !restartingForUpdate { Store.setKeepDisplayOn(false) }
         display.end()
+    }
+
+    // Updating preserves the user's switches. An ordinary Quit ends the holds as before.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !uninstalling else { return .terminateNow }
+        restartingForUpdate = updates.restartRequested
+        display.end()
+        if !restartingForUpdate {
+            if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
+            change { Store.setMode(.off) }
+        }
+        return .terminateNow
     }
 
     // MARK: Menu
@@ -109,14 +125,16 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         guard !uninstalling else { return }
 
-        let toggle = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
-        toggle.state = s.decision.mode == .off ? .off : .on
-        menu.addItem(toggle)
+        quickSettingItems(mode: s.decision.mode, keepDisplayOn: s.inputs.keepDisplayOn).forEach(menu.addItem)
         menu.addItem(.separator())
         if !Setup.snapshot(paths: paths).complete {
             menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
         }
         menu.addItem(menuItem("Settings…", "gear", #selector(openSettings)))
+        let check = menuItem(updates.state == .ready ? "Restart to Update…" : "Check for Updates…",
+                             "arrow.triangle.2.circlepath", #selector(checkForUpdates))
+        check.isEnabled = updates.state == .ready || updates.canCheck
+        menu.addItem(check)
         menu.addItem(.separator())
         menu.addItem(menuItem("Uninstall Awake…", "trash", #selector(uninstall)))
         menu.addItem(menuItem("Quit Awake", "xmark.rectangle", #selector(quit)))
@@ -129,8 +147,24 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return item
     }
 
+    func quickSettingItems(mode: Mode, keepDisplayOn: Bool) -> [NSMenuItem] {
+        let awake = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
+        awake.state = mode == .off ? .off : .on
+        let display = menuItem("Keep display on", "display", #selector(toggleKeepDisplayOn))
+        display.state = keepDisplayOn ? .on : .off
+        return [awake, display]
+    }
+
     @objc private func toggleAwake() {
         setAwake(Snapshot.take().decision.mode == .off)
+    }
+
+    @objc private func toggleKeepDisplayOn() { setKeepDisplayOn(!Store.keepDisplayOn()) }
+
+    @objc private func checkForUpdates() {
+        openSettings()
+        if updates.state == .ready { updates.installNow() }
+        else { updates.checkNow() }
     }
 
     func setAwake(_ on: Bool) {
@@ -156,7 +190,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         if setupModel != nil { window?.close() }
         if window == nil {
-            let view = SettingsView(model: model, setAwake: { [weak self] in self?.setAwake($0) },
+            let view = SettingsView(model: model, updates: updates, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
                                     setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) })
             window = makeWindow(view)
@@ -259,6 +293,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     @objc private func uninstall() {
         guard !uninstalling, paths.atRequiredLocation, setupModel?.installing != true else { return }
+        guard !updates.updateInProgress else {
+            showProblem("Finish the update before uninstalling", "Wait for the update to finish, then restart to apply it before choosing Uninstall Awake again.")
+            return
+        }
+        updates.suspended = true
+        defer { if !uninstalling { updates.suspended = false } }
         let confirm = NSAlert()
         confirm.messageText = "Uninstall Awake?"
         confirm.informativeText = Format.uninstallDescription
@@ -334,6 +374,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     private func resumeAfterUninstall() {
         uninstalling = false
+        updates.suspended = false
         watchState()
         refresh()
         openSettings()
@@ -358,9 +399,6 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// Quit ends the lid and display holds before the menu exits.
     @objc private func quit() {
         guard !uninstalling else { return }
-        if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
-        display.end()
-        change { Store.setMode(.off) }
         NSApp.terminate(nil)
     }
 

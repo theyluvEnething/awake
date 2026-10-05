@@ -12,6 +12,8 @@ derived="$dist/DerivedData"
 team="${AWAKE_TEAM_ID:-KSF29ZC99W}"
 profile="${AWAKE_NOTARY_PROFILE:-notary}"
 identity="${AWAKE_SIGN_IDENTITY:-}"
+sparkle_bin="${AWAKE_SPARKLE_BIN:-}"
+update_account="${AWAKE_UPDATE_KEY_ACCOUNT:-io.github.theyluvenething.awake}"
 app_id=io.github.theyluvenething.awake
 skip_notarize=false
 mounted=false
@@ -27,6 +29,14 @@ case "$#:${1:-}" in
   *) fail "usage: $0 [--skip-notarize]" ;;
 esac
 [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || fail "AWAKE_TEAM_ID must be a ten-character team ID"
+if ! "$skip_notarize"; then
+  for tool in generate_keys generate_appcast sign_update; do
+    [ -x "$sparkle_bin/$tool" ] || fail "set AWAKE_SPARKLE_BIN to Sparkle 2.10.0's bin directory"
+  done
+  update_key="$("$sparkle_bin/generate_keys" --account "$update_account" -p)"
+  expected_key="$(plutil -extract SUPublicEDKey raw -o - "$here/App/Info.plist")"
+  [ "$update_key" = "$expected_key" ] || fail "update signing key does not match the app's public key"
+fi
 
 # A hash selects one certificate even when another identity has a similar name.
 if [ -z "$identity" ]; then
@@ -72,6 +82,20 @@ xcodebuild -project "$project" -scheme Awake -configuration Release \
 app="$dist/Awake.app"
 ditto "$derived/Build/Products/Release/Awake.app" "$app"
 
+# Xcode signs the SPM framework's outer bundle but leaves its nested tools ad hoc signed.
+# Sign the known components inside out, preserving their existing entitlements.
+sparkle="$app/Contents/Frameworks/Sparkle.framework"
+sign_component() {
+  codesign --force --sign "$identity" --options runtime --timestamp \
+    --preserve-metadata=entitlements --identifier "$2" "$1"
+}
+sign_component "$sparkle/Versions/B/Autoupdate" org.sparkle-project.Sparkle.Autoupdate
+sign_component "$sparkle/Versions/B/Updater.app" org.sparkle-project.Sparkle.Updater
+sign_component "$sparkle/Versions/B/XPCServices/Downloader.xpc" org.sparkle-project.DownloaderService
+sign_component "$sparkle/Versions/B/XPCServices/Installer.xpc" org.sparkle-project.InstallerLauncher
+sign_component "$sparkle" org.sparkle-project.Sparkle
+sign_component "$app" "$app_id"
+
 # Inspect both slices: a valid outer bundle alone does not prove the helper is suitable.
 verify_binary() {
   local binary="$1" identifier="$2" name="$3" arch details entitlements architectures
@@ -100,7 +124,15 @@ verify_binary() {
 codesign --verify --deep --strict --verbose=2 "$app"
 verify_binary "$app/Contents/MacOS/awake" "$app_id" awake
 verify_binary "$app/Contents/MacOS/awake-helper" "$app_id.helper" awake-helper
+verify_binary "$app/Contents/Frameworks/Sparkle.framework/Sparkle" org.sparkle-project.Sparkle sparkle
+verify_binary "$sparkle/Versions/B/Autoupdate" org.sparkle-project.Sparkle.Autoupdate sparkle-autoupdate
+verify_binary "$sparkle/Versions/B/Updater.app/Contents/MacOS/Updater" org.sparkle-project.Sparkle.Updater sparkle-updater
+verify_binary "$sparkle/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" org.sparkle-project.DownloaderService sparkle-downloader
+verify_binary "$sparkle/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" org.sparkle-project.InstallerLauncher sparkle-installer
 info="$app/Contents/Info.plist"
+for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks SUAutomaticallyUpdate SUAllowsAutomaticUpdates SUVerifyUpdateBeforeExtraction SURequireSignedFeed; do
+  [ "$(plutil -extract "$key" raw -o - "$info")" = "$(plutil -extract "$key" raw -o - "$here/App/Info.plist")" ] || fail "bundled $key differs from its source"
+done
 [ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" = "$version" ] || fail "app version differs from MARKETING_VERSION"
 [ "$(plutil -extract CFBundleVersion raw -o - "$info")" = "$build" ] || fail "app build differs from CURRENT_PROJECT_VERSION"
 [ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" = "$app_id" ] || fail "wrong app bundle identifier"
@@ -150,11 +182,15 @@ assess() {
   fi
 }
 
-ditto -c -k --keepParent "$app" "$dist/Awake-$version.zip"
+archive="$dist/Awake-$version.zip"
+if "$skip_notarize"; then archive="$dist/Awake-$version-unnotarized.zip"; fi
+ditto -c -k --keepParent "$app" "$archive"
 if ! "$skip_notarize"; then
-  notarize "$dist/Awake-$version.zip" app
+  notarize "$archive" app
   xcrun stapler staple "$app"
   xcrun stapler validate "$app"
+  # The published update archive must contain the stapled app, not the pre-notarization copy.
+  ditto -c -k --keepParent "$app" "$archive"
 fi
 assess app "$app"
 
@@ -211,3 +247,19 @@ cask "awake" do
 end
 EOF
 echo "cask: $dist/awake.rb"
+
+mkdir "$dist/updates"
+cp "$dist/Awake-$version.zip" "$dist/updates/"
+"$sparkle_bin/generate_appcast" --account "$update_account" --maximum-deltas 0 \
+  --download-url-prefix "https://github.com/theyluvEnething/awake/releases/download/v$version/" \
+  --link "https://github.com/theyluvEnething/awake/releases/latest" \
+  -o "$dist/appcast.xml" "$dist/updates"
+"$sparkle_bin/sign_update" --account "$update_account" --verify "$dist/appcast.xml"
+signature="$(xmllint --xpath 'string(//enclosure/@*[local-name()="edSignature"])' "$dist/appcast.xml")"
+"$sparkle_bin/sign_update" --account "$update_account" --verify "$dist/Awake-$version.zip" "$signature"
+rm -rf "$dist/updates"
+(
+  cd "$dist"
+  shasum -a 256 "Awake-$version.dmg" "Awake-$version.zip" appcast.xml awake.rb > SHA256SUMS
+)
+echo "verified signed update archive and feed: $dist/appcast.xml"

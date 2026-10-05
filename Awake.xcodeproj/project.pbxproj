@@ -12,6 +12,8 @@
 		B00000000000000000000004 /* helper.plist in LaunchDaemons */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* helper.plist */; };
 		B00000000000000000000005 /* menu.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* menu.plist */; };
 		B00000000000000000000006 /* reconcile.plist in LaunchAgents */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* reconcile.plist */; };
+		B00000000000000000000007 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = S00000000000000000000002 /* Sparkle */; };
+		B00000000000000000000008 /* Sparkle-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* Sparkle-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,6 +67,7 @@
 		F00000000000000000000005 /* reconcile.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.theyluvenething.awake.reconcile.plist; sourceTree = "<group>"; };
 		F00000000000000000000006 /* Awake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Awake.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000000000000000000007 /* awake-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "awake-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F00000000000000000000013 /* Sparkle-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Sparkle-LICENSE.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -81,7 +84,7 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		E00000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000007 /* Sparkle in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
 		E00000000000000000000008 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
@@ -104,6 +107,7 @@
 				F00000000000000000000003 /* helper.plist */,
 				F00000000000000000000004 /* menu.plist */,
 				F00000000000000000000005 /* reconcile.plist */,
+				F00000000000000000000013 /* Sparkle-LICENSE.txt */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -132,6 +136,7 @@
 			dependencies = (D00000000000000000000002, );
 			fileSystemSynchronizedGroups = (F00000000000000000000008 /* awake */, );
 			name = Awake;
+			packageProductDependencies = (S00000000000000000000002 /* Sparkle */, );
 			productName = Awake;
 			productReference = F00000000000000000000006 /* Awake.app */;
 			productType = "com.apple.product-type.application";
@@ -159,6 +164,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (en, Base, );
 			mainGroup = F00000000000000000000010;
+			packageReferences = (S00000000000000000000001 /* Sparkle */, );
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F00000000000000000000012 /* Products */;
 			projectDirPath = "";
@@ -168,7 +174,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		E00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000001 /* AppIcon.icon in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		E00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000001 /* AppIcon.icon in Resources */, B00000000000000000000008 /* Sparkle-LICENSE.txt in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -189,13 +195,13 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = KSF29ZC99W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				SDKROOT = macosx;
@@ -214,13 +220,13 @@
 				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = KSF29ZC99W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				SDKROOT = macosx;
@@ -237,6 +243,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				EXECUTABLE_NAME = awake;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Awake;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -252,6 +259,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				EXECUTABLE_NAME = awake;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Awake;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -286,6 +294,22 @@
 		C00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000021 /* Debug */, C00000000000000000000022 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		C00000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000031 /* Debug */, C00000000000000000000032 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		S00000000000000000000001 /* Sparkle */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {kind = exactVersion; version = 2.10.0; };
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		S00000000000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = S00000000000000000000001 /* Sparkle */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;
 }

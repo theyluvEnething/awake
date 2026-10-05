@@ -16,6 +16,7 @@ final class AwakeModel {
 /// The settings window: the lid modes, the independent display option, and what Awake sees right now.
 struct SettingsView: View {
     let model: AwakeModel
+    let updates: UpdateController
     let setAwake: @MainActor @Sendable (Bool) -> Void
     let setIndefinitely: @MainActor @Sendable (Bool) -> Void
     let setKeepDisplayOn: @MainActor @Sendable (Bool) -> Void
@@ -65,6 +66,36 @@ struct SettingsView: View {
                 Row("Thermal state", value: Format.thermal(s.inputs.thermal))
                 Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
             }
+
+            Panel("Updates") {
+                Toggle(isOn: Binding(get: { updates.automatic }, set: updates.setAutomatic)) {
+                    Row("Automatic updates", detail: "Download quietly and install when you quit Awake.")
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Row("Version", value: UpdateController.installedVersion)
+                    Text(updateDetail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(updates.state == .error ? .orange : Palette.secondaryInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("updateStatus")
+                    HStack {
+                        if [.checking, .downloading, .extracting, .installing].contains(updates.state) {
+                            if let progress = updates.progress, updates.state == .downloading {
+                                ProgressView(value: progress)
+                            } else {
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                        Spacer()
+                        Button(updateAction) {
+                            if updates.state == .ready { updates.installNow() }
+                            else if updates.needsDownloads { updates.openDownloads() }
+                            else { updates.checkNow() }
+                        }
+                        .disabled(updates.state != .ready && !updates.needsDownloads && !updates.canCheck)
+                    }
+                }
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 8)
@@ -78,6 +109,25 @@ struct SettingsView: View {
                 try? await Task.sleep(for: .seconds(2))
                 model.snapshot = Snapshot.take()
             }
+        }
+    }
+
+    private var updateAction: String {
+        if updates.state == .ready { return "Restart to update" }
+        if updates.needsDownloads { return "Open downloads" }
+        return updates.state == .error ? "Retry" : "Check for updates"
+    }
+
+    private var updateDetail: String {
+        switch updates.state {
+        case .idle: return updates.automatic ? "Updates are checked after launch and every six hours." : "Automatic updates are off. You can check for updates manually."
+        case .checking: return "Checking for newer versions…"
+        case .current: return "Awake is up to date."
+        case .downloading: return "Downloading Awake \(updates.version ?? "update")…"
+        case .extracting: return "Preparing the update…"
+        case .ready: return "Awake \(updates.version ?? "update") is ready. It will install when you quit."
+        case .installing: return "Installing the update…"
+        case .error: return updates.message ?? "The update could not be checked. Try again later."
         }
     }
 }

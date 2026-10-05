@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>SUFeedURL</key>
+    <string>https://github.com/theyluvEnething/awake/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>9rFU96o5lKt57dupKYPfcSu+NhOskEBRU3FgLX7LG74=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <false/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
+    <true/>
+</dict>
+</plist>
