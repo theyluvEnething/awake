@@ -14,9 +14,10 @@ private func agent(_ session: String, project: String = "toybox", lastSeen: Doub
 private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
                     battery: Battery? = Battery(level: 80, charging: false, external: false, temperature: 30),
                     thermal: Thermal = .nominal, guards: Guards = Guards(),
-                    modeBoot: String = "boot-1", base: Mode? = nil, release: Double? = nil) -> Inputs {
+                    modeBoot: String = "boot-1", base: Mode? = nil, release: Double? = nil,
+                    keepDisplayOn: Bool = false) -> Inputs {
     Inputs(now: now, boot: "boot-1", mode: ModeState(mode: mode, base: base, boot: modeBoot), leases: leases,
-           battery: battery, thermal: thermal, guards: guards, releaseUntil: release)
+           battery: battery, thermal: thermal, guards: guards, releaseUntil: release, keepDisplayOn: keepDisplayOn)
 }
 
 @Suite struct Sessions {
@@ -158,11 +159,52 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
         #expect(Policy.decide(inputs(leases: working, battery: nil)).awake)
     }
 
-    @Test func sleepNowReleasesEvenWhileHeld() {
+    @Test func logoutReleasesEvenWhileHeld() {
         let d = Policy.decide(inputs(.on, release: now + 30))
         #expect(d.released)
         #expect(!d.awake)
         #expect(Policy.decide(inputs(.on, release: now - 1)).awake)
+    }
+}
+
+@Suite struct DisplayPolicyTests {
+    @Test(arguments: [Mode.off, .auto, .on])
+    func displayHoldIsIndependentOfTheLidMode(_ mode: Mode) {
+        let withoutDisplay = Policy.decide(inputs(mode))
+        let withDisplay = Policy.decide(inputs(mode, keepDisplayOn: true))
+        #expect(!withoutDisplay.displayAwake)
+        #expect(withDisplay.displayAwake)
+        #expect(withDisplay.awake == withoutDisplay.awake)
+        #expect(withDisplay.holds == withoutDisplay.holds)
+    }
+
+    @Test(arguments: [
+        (20, false, 30.0, Thermal.nominal, Guards(), true),
+        (25, false, 30.0, .nominal, Guards(battery: true), true),
+        (26, false, 30.0, .nominal, Guards(battery: true), false),
+        (10, true, 30.0, .nominal, Guards(battery: true), false),
+        (80, false, 40.0, .nominal, Guards(), true),
+        (80, false, 36.0, .nominal, Guards(heat: true), true),
+        (80, false, 35.0, .nominal, Guards(heat: true), false),
+        (80, false, 30.0, .serious, Guards(), true),
+        (80, false, 30.0, .critical, Guards(), true),
+    ] as [(Int, Bool, Double, Thermal, Guards, Bool)])
+    func displayRespectsTheExistingGuards(level: Int, charging: Bool, temperature: Double,
+                                          thermal: Thermal, guards: Guards, paused: Bool) {
+        let battery = Battery(level: level, charging: charging, external: charging, temperature: temperature)
+        let d = Policy.decide(inputs(.off, battery: battery, thermal: thermal, guards: guards, keepDisplayOn: true))
+        #expect(d.displayAwake == !paused)
+        #expect((d.pause != nil) == paused)
+        #expect(!d.awake, "the display option must not disable lid sleep")
+    }
+
+    @Test func logoutAlsoReleasesTheDisplay() {
+        #expect(!Policy.decide(inputs(.off, release: now + 30, keepDisplayOn: true)).displayAwake)
+        #expect(Policy.decide(inputs(.off, release: now - 1, keepDisplayOn: true)).displayAwake)
+    }
+
+    @Test func desktopsCanKeepTheDisplayOnWithoutABattery() {
+        #expect(Policy.decide(inputs(.off, battery: nil, keepDisplayOn: true)).displayAwake)
     }
 }
 

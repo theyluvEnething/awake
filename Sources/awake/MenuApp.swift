@@ -15,6 +15,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     private var item: NSStatusItem!
     private let model = AwakeModel(snapshot: Snapshot.take())
+    private let display = DisplaySleep()
     private var window: NSWindow?
     private let paths = SetupPaths(app: Bundle.main.bundleURL, home: FileManager.default.homeDirectoryForCurrentUser)
     private var setupModel: SetupModel?
@@ -79,13 +80,19 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
+        display.end()
+    }
+
     // MARK: Menu
 
-    /// Every item has an icon, as in macOS's own menus: Sleep Now, Settings and Quit use the
+    /// Every item has an icon, as in macOS's own menus: Settings and Quit use the
     /// symbols of the Apple and app menus.
     func menuNeedsUpdate(_ menu: NSMenu) {
         let s = Snapshot.take()
         model.snapshot = s
+        updateDisplay(s)
         menu.removeAllItems()
 
         let header = NSMenuItem(title: "Awake", action: nil, keyEquivalent: "")
@@ -105,10 +112,6 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let toggle = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
         toggle.state = s.decision.mode == .off ? .off : .on
         menu.addItem(toggle)
-        // While lid sleep is off, macOS ignores the Apple menu's Sleep too.
-        if s.flag {
-            menu.addItem(menuItem("Sleep Now", "sleep", #selector(sleepNow)))
-        }
         menu.addItem(.separator())
         if !Setup.snapshot(paths: paths).complete {
             menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
@@ -138,11 +141,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         change { on ? Store.setMode(.on) : Store.endOn() }
     }
 
-    /// Releases the flag for a minute so the Mac can sleep, then asks for sleep.
-    @objc func sleepNow() {
+    func setKeepDisplayOn(_ on: Bool) {
         guard !uninstalling && paths.atRequiredLocation else { return }
-        change(sleepAfterRelease: false) { Store.release(until: Date().timeIntervalSince1970 + 60) }
-        System.sleepNow()
+        Store.setKeepDisplayOn(on)
+        refresh()
+        reconcileInBackground()
     }
 
     @objc func openSettings() {
@@ -155,10 +158,10 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if window == nil {
             let view = SettingsView(model: model, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
-                                    sleepNow: { [weak self] in self?.sleepNow() })
+                                    setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) })
             window = makeWindow(view)
         }
-        model.snapshot = Snapshot.take()
+        refresh()
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
@@ -268,6 +271,8 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             return
         }
         uninstalling = true
+        Store.setKeepDisplayOn(false)
+        display.update(false)
         window?.close()
         stateWatch?.cancel()
         stateWatch = nil
@@ -350,18 +355,20 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return alert.runModal()
     }
 
-    /// Quit sets Off first, so nothing keeps the Mac running for agents once the menu is gone.
+    /// Quit ends the lid and display holds before the menu exits.
     @objc private func quit() {
         guard !uninstalling else { return }
+        if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
+        display.end()
         change { Store.setMode(.off) }
         NSApp.terminate(nil)
     }
 
-    private func change(sleepAfterRelease: Bool = true, _ edit: () -> Void) {
+    private func change(_ edit: () -> Void) {
         guard !uninstalling && paths.atRequiredLocation else { return }
         _ = Store.withLock(timeout: 2) {
             edit()
-            return Reconcile.run(locked: true, sleepAfterRelease: sleepAfterRelease)
+            return Reconcile.run(locked: true)
         }
         refresh()
     }
@@ -371,9 +378,16 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private func refresh() {
         let s = Snapshot.take()
         model.snapshot = s
+        updateDisplay(s)
         let warning = warning(s)
         item.button?.image = Glyph.status(flag: s.flag, warning: warning != nil)
         item.button?.toolTip = "Awake: " + (warning ?? summary(s))
+    }
+
+    private func updateDisplay(_ s: Snapshot) {
+        display.update(paths.atRequiredLocation && !uninstalling && s.decision.displayAwake)
+        model.displayAwake = display.active
+        model.displayError = display.error
     }
 
     private func summary(_ s: Snapshot) -> String {
@@ -390,6 +404,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// The helper is unavailable, or the flag has differed from awake's decision for a few seconds.
     private func warning(_ s: Snapshot) -> String? {
         if let error = s.status?.error { return Format.capitalized(error) }
+        if let error = display.error { return Format.capitalized(error) }
         guard let status = s.status, status.awake != s.flag else {
             disagreeSince = nil
             return nil
@@ -500,9 +515,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
     }
 
-    /// Logout, restart or shutdown: Stay awake indefinitely ends, lid sleep comes back on and so does
-    /// the energy mode.
+    /// Logout, restart or shutdown: indefinite lid and display holds end, lid sleep comes back on
+    /// and so does the energy mode.
     private func loggingOut() {
+        if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
+        display.end()
         guard !uninstalling && paths.atRequiredLocation else { return }
         _ = Store.withLock(timeout: 2) {
             Store.endOn()

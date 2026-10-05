@@ -18,7 +18,7 @@ struct Snapshot: Sendable {
         let inputs = Inputs(now: Date().timeIntervalSince1970, boot: System.bootSession(), mode: Store.mode(),
                             leases: leaseEntries(), battery: System.battery(), thermal: System.thermal(),
                             guards: status?.guards ?? Guards(), releaseUntil: release?.until,
-                            releaseBoot: release?.boot)
+                            releaseBoot: release?.boot, keepDisplayOn: Store.keepDisplayOn())
         return Snapshot(inputs: inputs, decision: Policy.decide(inputs), flag: root.sleepDisabled,
                         lidClosed: root.lidClosed, status: status, savedEnergy: Store.savedEnergy())
     }

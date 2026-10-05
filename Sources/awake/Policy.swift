@@ -118,9 +118,10 @@ struct Inputs: Sendable {
     var battery: Battery?
     var thermal: Thermal
     var guards: Guards
-    /// Sleep Now and logout keep the flag off until this time, within the boot they happened in.
+    /// Logout and uninstall keep the flag off until this time, within the boot they happened in.
     var releaseUntil: Double?
     var releaseBoot: String? = nil
+    var keepDisplayOn = false
 }
 
 /// Something that wants the Mac running with the lid closed.
@@ -152,8 +153,9 @@ enum Pause: Equatable, Sendable {
 
 struct Decision: Equatable, Sendable {
     var mode: Mode
+    var keepDisplayOn = false
     var holds: [Hold] = []
-    /// Only set while something holds the Mac.
+    /// Only set while something holds the Mac or its display.
     var pause: Pause? = nil
     var guards = Guards()
     var released = false
@@ -161,6 +163,7 @@ struct Decision: Equatable, Sendable {
     var expired: [String] = []
 
     var awake: Bool { !holds.isEmpty && pause == nil && !released }
+    var displayAwake: Bool { keepDisplayOn && pause == nil && !released }
 }
 
 enum EnergyAction: Equatable, Sendable {
@@ -185,7 +188,7 @@ enum Policy {
 
     static func decide(_ i: Inputs) -> Decision {
         let mode = effectiveMode(i.mode, boot: i.boot)
-        var d = Decision(mode: mode)
+        var d = Decision(mode: mode, keepDisplayOn: i.keepDisplayOn)
         if mode == .on {
             d.holds.append(Hold(kind: .on, name: "on"))
         }
@@ -239,7 +242,7 @@ enum Policy {
                 d.guards.heat = t >= hot || (i.guards.heat && t >= coolResume)
             }
         }
-        if !d.holds.isEmpty {
+        if !d.holds.isEmpty || d.keepDisplayOn {
             if let b = i.battery, d.guards.battery {
                 d.pause = .battery(b.level)
             } else if let t = i.battery?.temperature, d.guards.heat {

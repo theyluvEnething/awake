@@ -46,6 +46,7 @@ import Testing
                 saved = try! JSONDecoder().decode(Status.self, from: JSONEncoder().encode(value))
             }
             static func mode() -> ModeState? { selected }
+            static func keepDisplayOn() -> Bool { false }
             static func release() -> (until: Double, boot: String?)? { nil }
             static func leases() -> [(name: String, lease: Lease)] { [] }
             static func lease(_ name: String) -> Lease? { nil }

@@ -36,16 +36,19 @@ or its helper needs setup.
 
 - **Awake** keeps the Mac running with its lid closed while Claude or Codex works.
   Unticked, the mode is Off.
-- **Sleep Now** appears while lid sleep is disabled.
 - **Settings…** shows the active holds, battery, thermal state and Low Power.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out.
+- **Keep display on** in Settings prevents idle screen dimming and display sleep,
+  including while the lid mode is Off. It has no timer: turn it off or quit Awake
+  to restore normal display sleep.
 
 Awake releases its holds at 20% battery unless charging, until the battery
 recovers above 25%. It also releases them at 40 °C battery temperature, until
 below 36 °C, and at high or critical thermal state. With the lid closed on
 battery it switches to Low Power and restores your energy mode afterwards.
-It does not change display settings. Changes are logged to
+The display option follows the same battery and heat guards. It uses a temporary
+macOS assertion and does not change your display settings. Power changes are logged to
 `~/Library/Logs/awake.log`.
 
 ## Command line

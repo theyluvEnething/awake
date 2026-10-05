@@ -17,7 +17,7 @@ struct Status: Codable, Equatable, Sendable {
     var loggedAt: Double? = nil
 }
 
-/// ~/Library/Application Support/awake: mode, leases/, events/, saved energy mode, status, release, lock.
+/// ~/Library/Application Support/awake: mode, display, leases/, events/, saved energy mode, status, release, lock.
 /// Every file is small JSON, written to a temporary file and renamed into place.
 enum Store {
     static let dir = FileManager.default.homeDirectoryForCurrentUser
@@ -45,6 +45,10 @@ enum Store {
         }
     }
 
+    /// Independent of the lid mode. A missing preference leaves normal display sleep enabled.
+    static func keepDisplayOn() -> Bool { read(Bool.self, "display") ?? false }
+    static func setKeepDisplayOn(_ on: Bool) { write(on, "display") }
+
     static func status() -> Status? { read(Status.self, "status") }
     static func setStatus(_ status: Status) { write(status, "status") }
 
@@ -61,7 +65,7 @@ enum Store {
     static func saveEnergy(_ mode: Int) { write(SavedEnergy(battery: mode), "energy") }
     static func forgetEnergy() { remove(dir.appending(path: "energy")) }
 
-    /// Until when, and in which boot, Sleep Now or logout keep the flag off.
+    /// Until when, and in which boot, logout or uninstall keep the flag off.
     static func release() -> (until: Double, boot: String?)? { read(Release.self, "release").map { ($0.until, $0.boot) } }
     static func release(until: Double) { write(Release(until: until, boot: System.bootSession()), "release") }
     static func clearRelease() { remove(dir.appending(path: "release")) }

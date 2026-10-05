@@ -5,19 +5,20 @@ import SwiftUI
 @MainActor @Observable
 final class AwakeModel {
     var snapshot: Snapshot
+    var displayAwake = false
+    var displayError: String?
 
     init(snapshot: Snapshot) {
         self.snapshot = snapshot
     }
 }
 
-/// The settings window: the same Awake toggle as the menu, Stay awake indefinitely, and what awake
-/// sees right now. `awake status` prints the same rows.
+/// The settings window: the lid modes, the independent display option, and what Awake sees right now.
 struct SettingsView: View {
     let model: AwakeModel
     let setAwake: @MainActor @Sendable (Bool) -> Void
     let setIndefinitely: @MainActor @Sendable (Bool) -> Void
-    let sleepNow: @MainActor @Sendable () -> Void
+    let setKeepDisplayOn: @MainActor @Sendable (Bool) -> Void
 
     var body: some View {
         let s = model.snapshot
@@ -30,10 +31,15 @@ struct SettingsView: View {
                 Toggle(isOn: Binding(get: { d.mode == .on }, set: setIndefinitely)) {
                     Row(Format.mode(.on), detail: Format.sentence(Format.explain(.on)))
                 }
+                Toggle(isOn: Binding(get: { s.inputs.keepDisplayOn }, set: setKeepDisplayOn)) {
+                    Row("Keep display on", detail: "Prevents the screen from dimming or turning off while idle, until you turn this off or quit Awake.")
+                }
             }
 
             Panel("Now") {
                 Row("Lid sleep", detail: Format.sentence(Format.lidEffect(s.flag)), value: Format.lidSleep(s.flag))
+                Row("Display sleep", detail: model.displayAwake ? "The screen stays on while you are idle." : "Uses your macOS display settings.",
+                    value: model.displayAwake ? "Off" : "On")
                 ForEach(d.holds, id: \.name) { hold in
                     Row(Format.hold(hold, now: s.inputs.now))
                 }
@@ -45,8 +51,10 @@ struct SettingsView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.orange)
                 }
-                if s.flag {
-                    Button("Sleep Now", action: sleepNow)
+                if let error = model.displayError {
+                    Label(Format.capitalized(error), systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.orange)
                 }
             }
 
