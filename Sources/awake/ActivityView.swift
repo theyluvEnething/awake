@@ -145,10 +145,13 @@ private struct MetricChart: View {
         }
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: expanded ? 5 : 3)) { axis in
-                AxisValueLabel {
+                AxisValueLabel(centered: false,
+                               anchor: axis.index == 0 ? .topLeading : axis.index == axis.count - 1 ? .topTrailing : .top,
+                               collisionResolution: .greedy) {
                     if let date = axis.as(Date.self) {
                         Text(date.formatted(range == .week ? .dateTime.month(.abbreviated).day() : .dateTime.hour().minute()))
                             .font(.system(size: 9)).foregroundStyle(Palette.secondaryInk)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             }

@@ -218,10 +218,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private func openActivity() {
         guard !uninstalling else { return }
         if activityWindow == nil {
-            activityWindow = makeWindow(ActivityView(model: model, expanded: true).padding(24)
-                .frame(minWidth: 660, minHeight: 600).background(Color(nsColor: Palette.canvas)),
+            activityWindow = makeWindow(ScrollView {
+                ActivityView(model: model, expanded: true).padding(24)
+            }.frame(minWidth: 660, minHeight: 600).background(Color(nsColor: Palette.canvas)),
                 title: "Awake Activity", resizable: true)
-            activityWindow?.setContentSize(NSSize(width: 880, height: 720))
+            activityWindow?.setContentSize(NSSize(width: 880, height: 780))
             activityWindow?.minSize = NSSize(width: 700, height: 640)
             activityWindow?.center()
         }
