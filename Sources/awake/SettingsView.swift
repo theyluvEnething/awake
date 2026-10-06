@@ -108,12 +108,18 @@ struct SettingsView: View {
                 }
             }
 
-            DisclosureGroup("Battery and heat protections") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(Format.guards).fixedSize(horizontal: false, vertical: true)
-                    Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
+            Panel {
+                if let battery = s.inputs.battery {
+                    Row("Battery", value: Format.battery(battery))
                 }
-                .padding(.top, 10)
+                Row("Thermal state", value: Format.thermal(s.inputs.thermal))
+                Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
+            }
+
+            DisclosureGroup("Battery and heat protections") {
+                Text(Format.guards)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
             }
             .font(.system(size: 12))
             .foregroundStyle(Palette.secondaryInk)
