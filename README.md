@@ -1,6 +1,6 @@
 # Awake
 
-Keeps a MacBook running with its lid closed while Claude Code or Codex works,
+Keeps a MacBook running with its lid closed while Claude Code, Codex or T3 Code works,
 and lets it sleep normally otherwise. Requires macOS 26 or later. The release
 supports Apple Silicon and Intel Macs.
 
@@ -24,7 +24,7 @@ update**. Turn off **Automatic updates** to use only **Check for updates**.
 The version and check result appear in Settings. Updates verify both the signed
 feed and archive before installation. Your settings and hooks stay in place.
 For a manual download, quit the menu app before replacing `/Applications/Awake.app`.
-**Uninstall Awake…** in the menu restores lid sleep, removes the helper, login
+**Uninstall Awake…** in Settings > App restores lid sleep, removes the helper, login
 items, Codex hooks, state and log, then moves the app to the Trash.
 
 ## Use
@@ -34,13 +34,20 @@ call until its turn ends. Lid sleep returns one minute after the last turn
 finishes. If the lid is already closed, Awake requests sleep. A session that
 sends no hook for 15 minutes, or whose agent process has exited, no longer counts.
 
+T3 Code's local active turns are detected automatically while its server runs.
+Awake reads T3's session state without changing its settings or database. Turns
+waiting for approval or user input, completed turns and provider errors no longer
+count. A running turn is checked every five seconds and gets the same one-minute
+grace period when it ends. T3 0.0.45's session format is supported; Settings shows
+when monitoring is unavailable. Remote environments are not monitored by the Mac.
+
 The menu-bar cup shows what closing the lid does: an outline cup sleeps, a
 filled cup keeps running, and a badge means lid sleep was changed outside Awake
 or its helper needs setup.
 
 - **Awake** keeps the Mac running with its lid closed while Claude or Codex works.
   Unticked, the mode is Off.
-- **Settings…** shows the active holds, battery, thermal state and Low Power.
+- **Settings…** groups wake controls, Activity and app maintenance.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out.
 - **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
@@ -54,6 +61,13 @@ battery it switches to Low Power and restores your energy mode afterwards.
 The display option follows the same battery and heat guards. It uses a temporary
 macOS assertion and does not change your display settings. Power changes are logged to
 `~/Library/Logs/awake.log`.
+
+Settings > Activity graphs battery level, battery temperature and thermal state
+over time. **Open in separate window** shows a larger, resizable activity monitor
+with one-hour, six-hour, one-day and seven-day ranges, values at recorded moments,
+minimum/maximum values and access to the text log. Awake records once a minute and
+keeps seven days locally across restarts. Gaps during sleep and unavailable sensors
+remain gaps. Uninstall removes this history with the rest of Awake's state.
 
 ## Command line
 

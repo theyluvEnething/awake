@@ -34,8 +34,18 @@ import Testing
             static func thermal() -> Thermal { .nominal }
         }
         enum Proc {
-            struct Info { var name: String; var started: Double }
+            struct Info { var name: String; var started: Double; var pid: Int32 = 0 }
             static func info(_ pid: Int32) -> Info? { nil }
+        }
+        enum T3Monitor {
+            static func server() -> Proc.Info? { nil }
+            static func synchronize(now: Double) {}
+        }
+        struct ActivitySample {
+            static func take(_ snapshot: Snapshot, flag: Bool) -> ActivitySample { ActivitySample() }
+        }
+        enum ActivityHistory {
+            static func record(_ sample: ActivitySample) throws {}
         }
         enum Store {
             static var saved: Status? = nil

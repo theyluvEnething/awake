@@ -18,6 +18,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private let display = DisplaySleep()
     private let updates = UpdateController()
     private var window: NSWindow?
+    private var activityWindow: NSWindow?
     private let paths = SetupPaths(app: Bundle.main.bundleURL, home: FileManager.default.homeDirectoryForCurrentUser)
     private var setupModel: SetupModel?
     private var setupTimer: Timer?
@@ -28,6 +29,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var restartingForUpdate = false
     private var stateWatch: DispatchSourceFileSystemObject?
     private var refreshTimer: Timer?
+    private var t3Timer: Timer?
     private var refreshPending = false
     private var disagreeSince: Double?
     private var lidPort: IONotificationPortRef?
@@ -70,6 +72,14 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
         }
         refreshTimer?.tolerance = 10
+        t3Timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if FileManager.default.fileExists(atPath: T3Monitor.base.path) {
+                    self?.reconcileInBackground()
+                }
+            }
+        }
+        t3Timer?.tolerance = 1
         refresh()
         reconcileInBackground()
         if paths.atRequiredLocation { updates.start() }
@@ -125,19 +135,18 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         guard !uninstalling else { return }
 
-        quickSettingItems(mode: s.decision.mode, keepDisplayOn: s.inputs.keepDisplayOn).forEach(menu.addItem)
-        menu.addItem(.separator())
         if !Setup.snapshot(paths: paths).complete {
             menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
         }
-        menu.addItem(menuItem("Settings…", "gear", #selector(openSettings)))
-        let check = menuItem(updates.state == .ready ? "Restart to Update…" : "Check for Updates…",
-                             "arrow.triangle.2.circlepath", #selector(checkForUpdates))
-        check.isEnabled = updates.state == .ready || updates.canCheck
-        menu.addItem(check)
-        menu.addItem(.separator())
-        menu.addItem(menuItem("Uninstall Awake…", "trash", #selector(uninstall)))
-        menu.addItem(menuItem("Quit Awake", "xmark.rectangle", #selector(quit)))
+        menuItems(mode: s.decision.mode, keepDisplayOn: s.inputs.keepDisplayOn).forEach(menu.addItem)
+    }
+
+    func menuItems(mode: Mode, keepDisplayOn: Bool) -> [NSMenuItem] {
+        let settings = menuItem("Settings…", "gear", #selector(openSettings))
+        settings.keyEquivalent = ","
+        let quit = menuItem("Quit Awake", "xmark.rectangle", #selector(quit))
+        quit.keyEquivalent = "q"
+        return quickSettingItems(mode: mode, keepDisplayOn: keepDisplayOn) + [.separator(), settings, quit]
     }
 
     private func menuItem(_ title: String, _ symbol: String, _ action: Selector) -> NSMenuItem {
@@ -160,12 +169,6 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     @objc private func toggleKeepDisplayOn() { setKeepDisplayOn(!Store.keepDisplayOn()) }
-
-    @objc private func checkForUpdates() {
-        openSettings()
-        if updates.state == .ready { updates.installNow() }
-        else { updates.checkNow() }
-    }
 
     func setAwake(_ on: Bool) {
         change { Store.setMode(on ? .auto : .off) }
@@ -192,7 +195,9 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if window == nil {
             let view = SettingsView(model: model, updates: updates, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
-                                    setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) })
+                                    setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) },
+                                    openActivity: { [weak self] in self?.openActivity() },
+                                    uninstall: { [weak self] in self?.uninstall() })
             window = makeWindow(view)
         }
         refresh()
@@ -201,16 +206,34 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     func windowWillClose(_ notification: Notification) {
+        guard let closing = notification.object as? NSWindow else { return }
+        if closing === activityWindow { activityWindow = nil; return }
+        guard closing === window else { return }
         setupTimer?.invalidate()
         setupTimer = nil
         setupModel = nil
         window = nil
     }
 
-    private func makeWindow<Content: View>(_ view: Content) -> NSWindow {
+    private func openActivity() {
+        guard !uninstalling else { return }
+        if activityWindow == nil {
+            activityWindow = makeWindow(ActivityView(model: model, expanded: true).padding(24)
+                .frame(minWidth: 660, minHeight: 600).background(Color(nsColor: Palette.canvas)),
+                title: "Awake Activity", resizable: true)
+            activityWindow?.setContentSize(NSSize(width: 880, height: 720))
+            activityWindow?.minSize = NSSize(width: 700, height: 640)
+            activityWindow?.center()
+        }
+        NSApp.activate()
+        activityWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func makeWindow<Content: View>(_ view: Content, title: String = "Awake", resizable: Bool = false) -> NSWindow {
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Awake"
+        window.title = title
         window.styleMask = [.titled, .closable]
+        if resizable { window.styleMask.formUnion([.resizable, .miniaturizable]) }
         // The title bar shows the canvas, so the window is one surface as in AdBlock.
         window.titlebarAppearsTransparent = true
         window.backgroundColor = Palette.canvas
@@ -314,6 +337,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         Store.setKeepDisplayOn(false)
         display.update(false)
         window?.close()
+        activityWindow?.close()
         stateWatch?.cancel()
         stateWatch = nil
         Task { await performUninstall() }
@@ -466,15 +490,20 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             return
         }
         reconcileTask = Task { [weak self] in
-            let status = await Task.detached(priority: .utility) {
+            let result = await Task.detached(priority: .utility) {
+                let status: Status?
                 if retryFailures {
-                    return Store.withLock { Store.clearFailures(); return Reconcile.run(locked: true) } ?? nil
+                    status = Store.withLock { Store.clearFailures(); return Reconcile.run(locked: true) } ?? nil
+                } else {
+                    status = Reconcile.run()
                 }
-                return Reconcile.run()
+                return (status, ActivityHistory.load(), T3Monitor.read())
             }.value
             guard let self else { return }
             reconcileTask = nil
-            setupModel?.powerError = status?.error
+            setupModel?.powerError = result.0?.error
+            model.samples = result.1
+            model.t3 = result.2
             refresh()
             if reconcilePending {
                 let retry = retryHelperPending

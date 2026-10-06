@@ -116,6 +116,7 @@ enum Commands {
             ("Lid", s.lidClosed ? "Closed" : "Open"),
         ]
         let holds = d.holds.map { Format.hold($0, now: s.inputs.now) }
+        rows.append(("T3 Code", T3Monitor.read().summary))
         for (i, hold) in (holds.isEmpty ? ["None"] : holds).enumerated() {
             rows.append((i == 0 ? "Holds" : "", hold))
         }

@@ -246,7 +246,7 @@ cask "awake" do
 
   url "https://github.com/theyluvEnething/awake/releases/download/v#{version}/Awake-#{version}.dmg"
   name "Awake"
-  desc "Keep your Mac awake while Claude Code or Codex works"
+  desc "Keep your Mac awake while Claude Code, Codex or T3 Code works"
   homepage "https://github.com/theyluvEnething/awake"
 
   depends_on macos: ">= :tahoe"

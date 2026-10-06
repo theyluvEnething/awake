@@ -19,7 +19,7 @@ enum Format {
     static func explain(_ mode: Mode) -> String {
         switch mode {
         case .off: lidEffect(false)
-        case .auto: "keeps the Mac running with the lid closed while Claude or Codex works"
+        case .auto: "keeps the Mac running with the lid closed while Claude, Codex or T3 Code works"
         case .on: "even when nothing runs, until you turn it off, restart or log out"
         }
     }
@@ -54,7 +54,7 @@ enum Format {
         case .on:
             return mode(.on)
         case .agent(let agent):
-            return [capitalized(agent), hold.detail, age].compactMap { $0 }.joined(separator: " · ")
+            return [agent == "t3" ? "T3 Code" : capitalized(agent), hold.detail, age].compactMap { $0 }.joined(separator: " · ")
         case .command:
             return ["Command", hold.detail, age].compactMap { $0 }.joined(separator: " · ")
         case .timer:
@@ -122,7 +122,7 @@ enum Format {
 
     // MARK: Setup
 
-    static let setupPurpose = "Keeps your Mac running with the lid closed while Claude Code or Codex works."
+    static let setupPurpose = "Keeps your Mac running with the lid closed while Claude Code, Codex or T3 Code works."
     static let setupLocation = "Move Awake.app to /Applications, then open it there. Hooks and the command line "
         + "use /Applications/Awake.app, and macOS registers its helper and login items at that location. "
         + "Setup cannot run from Downloads, a disk image or App Translocation."

@@ -7,40 +7,86 @@ final class AwakeModel {
     var snapshot: Snapshot
     var displayAwake = false
     var displayError: String?
+    var samples = ActivityHistory.load()
+    var t3 = T3Monitor.State()
 
     init(snapshot: Snapshot) {
         self.snapshot = snapshot
     }
 }
 
-/// The settings window: the lid modes, the independent display option, and what Awake sees right now.
+/// Daily controls, activity history and app maintenance each have a compact page.
 struct SettingsView: View {
     let model: AwakeModel
     let updates: UpdateController
     let setAwake: @MainActor @Sendable (Bool) -> Void
     let setIndefinitely: @MainActor @Sendable (Bool) -> Void
     let setKeepDisplayOn: @MainActor @Sendable (Bool) -> Void
+    let openActivity: @MainActor @Sendable () -> Void
+    let uninstall: @MainActor @Sendable () -> Void
+    @State private var page = Page.awake
+
+    private enum Page: String, CaseIterable, Identifiable {
+        case awake = "Awake", activity = "Activity", app = "App"
+        var id: Self { self }
+    }
 
     var body: some View {
+        VStack(spacing: 20) {
+            Picker("Settings", selection: $page) {
+                ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityIdentifier("settingsPage")
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    switch page {
+                    case .awake: controls
+                    case .activity:
+                        ActivityView(model: model, expanded: false)
+                        Button("Open in separate window", systemImage: "arrow.up.left.and.arrow.down.right", action: openActivity)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    case .app: maintenance
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .padding(24)
+        .frame(width: 520, height: 640)
+        .background(Color(nsColor: Palette.canvas))
+        .toggleStyle(TrailingSwitch())
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                model.snapshot = Snapshot.take()
+            }
+        }
+    }
+
+    private var controls: some View {
         let s = model.snapshot
         let d = s.decision
-        VStack(alignment: .leading, spacing: 24) {
+        return VStack(alignment: .leading, spacing: 20) {
             Panel {
                 Toggle(isOn: Binding(get: { d.mode != .off }, set: setAwake)) {
-                    Row(Format.mode(.auto), detail: Format.sentence(Format.explain(.auto)))
+                    Row(Format.mode(.auto), detail: "With the lid closed while Claude, Codex or T3 Code works.")
                 }
                 Toggle(isOn: Binding(get: { d.mode == .on }, set: setIndefinitely)) {
-                    Row(Format.mode(.on), detail: Format.sentence(Format.explain(.on)))
+                    Row(Format.mode(.on), detail: "Until you turn it off, restart or log out.")
                 }
                 Toggle(isOn: Binding(get: { s.inputs.keepDisplayOn }, set: setKeepDisplayOn)) {
-                    Row("Keep display on", detail: "Prevents the screen from dimming or turning off while idle, until you turn this off or quit Awake.")
+                    Row("Keep display on", detail: "Prevent idle dimming and display sleep.")
                 }
             }
 
             Panel("Now") {
-                Row("Lid sleep", detail: Format.sentence(Format.lidEffect(s.flag)), value: Format.lidSleep(s.flag))
-                Row("Display sleep", detail: model.displayAwake ? "The screen stays on while you are idle." : "Uses your macOS display settings.",
-                    value: model.displayAwake ? "Off" : "On")
+                Row("Lid sleep", value: Format.lidSleep(s.flag))
+                Row("Display sleep", value: model.displayAwake ? "Off" : "On")
+                Row("T3 Code", value: model.t3.summary)
                 ForEach(d.holds, id: \.name) { hold in
                     Row(Format.hold(hold, now: s.inputs.now))
                 }
@@ -57,16 +103,25 @@ struct SettingsView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.orange)
                 }
-            }
-
-            Panel(note: Format.guards) {
-                if let b = s.inputs.battery {
-                    Row("Battery", value: Format.battery(b))
+                if let problem = model.t3.problem {
+                    Text(problem).font(.system(size: 12)).foregroundStyle(.orange)
                 }
-                Row("Thermal state", value: Format.thermal(s.inputs.thermal))
-                Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
             }
 
+            DisclosureGroup("Battery and heat protections") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(Format.guards).fixedSize(horizontal: false, vertical: true)
+                    Row("Low Power", value: Format.lowPower(setByAwake: s.savedEnergy != nil))
+                }
+                .padding(.top, 10)
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.secondaryInk)
+        }
+    }
+
+    private var maintenance: some View {
+        VStack(alignment: .leading, spacing: 20) {
             Panel("Updates") {
                 Toggle(isOn: Binding(get: { updates.automatic }, set: updates.setAutomatic)) {
                     Row("Automatic updates", detail: "Download quietly and install when you quit Awake.")
@@ -96,18 +151,13 @@ struct SettingsView: View {
                     }
                 }
             }
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .padding(.bottom, 24)
-        .frame(width: 440)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(Color(nsColor: Palette.canvas))
-        .toggleStyle(TrailingSwitch())
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                model.snapshot = Snapshot.take()
+            HStack {
+                Text("Remove Awake and restore normal sleep.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.secondaryInk)
+                Spacer()
+                Button("Uninstall Awake…", role: .destructive, action: uninstall)
+                    .disabled(updates.updateInProgress)
             }
         }
     }

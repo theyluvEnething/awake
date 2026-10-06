@@ -36,7 +36,9 @@ struct Snapshot: Sendable {
         guard let pid = lease.pid, pid > 0 else { return true }
         guard let process = Proc.info(pid) else { return false }
         switch kind {
-        case .agent: return process.name == lease.agent
+        case .agent:
+            if lease.agent == "t3" { return T3Monitor.server()?.pid == pid }
+            return process.name == lease.agent
         case .run: return abs(process.started - lease.started) < 2
         case .timer: return true
         }
@@ -55,6 +57,7 @@ enum Reconcile {
     }
 
     private static func apply(sleepAfterRelease: Bool) -> Status {
+        T3Monitor.synchronize(now: Date().timeIntervalSince1970)
         // Hooks only queue their events, so every lease changes here, under the lock.
         for (file, event) in Store.queuedEvents() {
             let old = Store.lease(event.lease)
@@ -173,6 +176,7 @@ enum Reconcile {
         let status = Status(awake: d.awake, flag: flag, error: error, guards: d.guards, pendingSleep: pendingSleep, flagFailedAt: flagFailedAt,
                             energyFailedAt: energyFailedAt, loggedAt: loggedAt)
         if status != previous { Store.setStatus(status) }
+        try? ActivityHistory.record(.take(s, flag: flag))
         return status
     }
 

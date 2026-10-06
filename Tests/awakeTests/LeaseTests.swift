@@ -25,6 +25,10 @@ private func apply(_ event: HookEvent, _ stamp: Double, to old: Lease?, pid: Int
 }
 
 @Suite struct Leases {
+    @Test func t3SessionsAreRecognizedAsAgentLeases() {
+        #expect(LeaseKind(fileName: "t3-thread") != nil)
+    }
+
     @Test func toolEventStartsALeaseWithoutAPrompt() {
         let lease = apply(.activity, now - 3, to: nil)
         #expect(lease.isRunning)

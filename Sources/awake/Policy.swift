@@ -33,9 +33,9 @@ struct Lease: Codable, Equatable, Sendable {
 enum LeaseKind: Sendable {
     case agent, run, timer
 
-    /// The kind follows from the file name: claude-<session>, codex-<session>, run-<pid>, for-<id>.
+    /// The kind follows from the file name: claude/codex/t3-<session>, run-<pid>, for-<id>.
     init?(fileName: String) {
-        if fileName.hasPrefix("claude-") || fileName.hasPrefix("codex-") {
+        if fileName.hasPrefix("claude-") || fileName.hasPrefix("codex-") || fileName.hasPrefix("t3-") {
             self = .agent
         } else if fileName.hasPrefix("run-") {
             self = .run
