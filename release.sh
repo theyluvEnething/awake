@@ -130,6 +130,11 @@ verify_binary "$sparkle/Versions/B/Autoupdate" org.sparkle-project.Sparkle.Autou
 verify_binary "$sparkle/Versions/B/Updater.app/Contents/MacOS/Updater" org.sparkle-project.Sparkle.Updater sparkle-updater
 verify_binary "$sparkle/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" org.sparkle-project.DownloaderService sparkle-downloader
 verify_binary "$sparkle/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" org.sparkle-project.InstallerLauncher sparkle-installer
+for arch in arm64 x86_64; do
+  otool -arch "$arch" -l "$app/Contents/MacOS/awake" | grep -Fq 'path @executable_path/../Frameworks (offset ' || fail "awake ($arch) cannot locate embedded frameworks"
+done
+# Loading the packaged executable catches missing framework paths that a successful build does not.
+"$app/Contents/MacOS/awake" status | tee "$dist/runtime-status.txt"
 info="$app/Contents/Info.plist"
 for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks SUAutomaticallyUpdate SUAllowsAutomaticUpdates SUVerifyUpdateBeforeExtraction SURequireSignedFeed; do
   [ "$(plutil -extract "$key" raw -o - "$info")" = "$(plutil -extract "$key" raw -o - "$here/App/Info.plist")" ] || fail "bundled $key differs from its source"

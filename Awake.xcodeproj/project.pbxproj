@@ -247,6 +247,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Awake;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", );
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake;
 				PRODUCT_MODULE_NAME = awake;
 				PRODUCT_NAME = Awake;
@@ -263,6 +264,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Awake;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", );
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.theyluvenething.awake;
 				PRODUCT_MODULE_NAME = awake;
 				PRODUCT_NAME = Awake;

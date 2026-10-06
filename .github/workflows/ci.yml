@@ -26,3 +26,5 @@ jobs:
           xcodebuild -project Awake.xcodeproj -scheme Awake -configuration Release
           -destination 'generic/platform=macOS' -derivedDataPath build/Xcode
           CODE_SIGNING_ALLOWED=NO build
+      - name: Run packaged executable
+        run: build/Xcode/Build/Products/Release/Awake.app/Contents/MacOS/awake status
