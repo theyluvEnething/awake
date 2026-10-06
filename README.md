@@ -106,6 +106,8 @@ and the checksums on the same GitHub release. It replaces that output directory 
 The script uses the keychain's Developer ID Application identity for team
 `KSF29ZC99W` and the notarytool keychain profile `notary`.
 `AWAKE_TEAM_ID`, `AWAKE_SIGN_IDENTITY` and `AWAKE_NOTARY_PROFILE` override these.
+To use an existing App Store Connect API key directly, set `AWAKE_NOTARY_KEY_PATH`
+and `AWAKE_NOTARY_KEY_ID`, plus `AWAKE_NOTARY_ISSUER` for a team key. Keep the key outside the repository.
 Set `AWAKE_SPARKLE_BIN` to the official Sparkle 2.10.0 release's `bin` directory.
 The update-signing key lives in Keychain under account `io.github.theyluvenething.awake`;
 `AWAKE_UPDATE_KEY_ACCOUNT` overrides the account. The script rejects a mismatched key.

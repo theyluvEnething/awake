@@ -11,6 +11,7 @@ dist="$here/dist"
 derived="$dist/DerivedData"
 team="${AWAKE_TEAM_ID:-KSF29ZC99W}"
 profile="${AWAKE_NOTARY_PROFILE:-notary}"
+notary_auth=(--keychain-profile "$profile")
 identity="${AWAKE_SIGN_IDENTITY:-}"
 sparkle_bin="${AWAKE_SPARKLE_BIN:-}"
 update_account="${AWAKE_UPDATE_KEY_ACCOUNT:-io.github.theyluvenething.awake}"
@@ -29,6 +30,12 @@ case "$#:${1:-}" in
   *) fail "usage: $0 [--skip-notarize]" ;;
 esac
 [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || fail "AWAKE_TEAM_ID must be a ten-character team ID"
+if ! "$skip_notarize" && [ -n "${AWAKE_NOTARY_KEY_PATH:-}" ]; then
+  [ -f "$AWAKE_NOTARY_KEY_PATH" ] || fail "AWAKE_NOTARY_KEY_PATH does not exist"
+  [ -n "${AWAKE_NOTARY_KEY_ID:-}" ] || fail "set AWAKE_NOTARY_KEY_ID with the API key path"
+  notary_auth=(--key "$AWAKE_NOTARY_KEY_PATH" --key-id "$AWAKE_NOTARY_KEY_ID")
+  if [ -n "${AWAKE_NOTARY_ISSUER:-}" ]; then notary_auth+=(--issuer "$AWAKE_NOTARY_ISSUER"); fi
+fi
 if ! "$skip_notarize"; then
   for tool in generate_keys sign_update; do
     [ -x "$sparkle_bin/$tool" ] || fail "set AWAKE_SPARKLE_BIN to Sparkle 2.10.0's bin directory"
@@ -158,7 +165,7 @@ echo "verified app version $version ($build), signatures, architectures, icon an
 notarize() {
   local artifact="$1" label="$2" result status id submitted=true
   result="$dist/notary-$label.json"
-  if ! xcrun notarytool submit "$artifact" --keychain-profile "$profile" --wait --output-format json > "$result"; then
+  if ! xcrun notarytool submit "$artifact" "${notary_auth[@]}" --wait --output-format json > "$result"; then
     submitted=false
   fi
   cat "$result"
@@ -166,7 +173,7 @@ notarize() {
   id="$(plutil -extract id raw -o - "$result" 2>/dev/null)" || id=""
   if ! "$submitted" || [ "$status" != Accepted ]; then
     if [ -n "$id" ]; then
-      xcrun notarytool log "$id" --keychain-profile "$profile" || true
+      xcrun notarytool log "$id" "${notary_auth[@]}" || true
     fi
     fail "$label notarization was not Accepted"
   fi
