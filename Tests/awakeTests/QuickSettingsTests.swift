@@ -27,6 +27,13 @@ import Testing
                 #expect(items[1].target === app)
                 let action = try #require(items[1].action)
                 #expect(app.responds(to: action))
+                let closed = app.quickSettingItems(mode: mode, keepDisplayOn: displayOn, lidClosed: true)
+                #expect(closed[1].state == .off)
+                #expect(!closed[1].isEnabled)
+                #expect(closed[0].state == items[0].state)
+                let reopened = app.quickSettingItems(mode: mode, keepDisplayOn: false, lidClosed: false)
+                #expect(reopened[1].state == .off)
+                #expect(reopened[1].isEnabled)
             }
         }
     }

@@ -138,15 +138,15 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if !Setup.snapshot(paths: paths).complete {
             menu.addItem(menuItem("Finish Setup…", "wrench.and.screwdriver", #selector(openSetup)))
         }
-        menuItems(mode: s.decision.mode, keepDisplayOn: s.inputs.keepDisplayOn).forEach(menu.addItem)
+        menuItems(mode: s.decision.mode, keepDisplayOn: s.inputs.keepDisplayOn, lidClosed: s.lidClosed).forEach(menu.addItem)
     }
 
-    func menuItems(mode: Mode, keepDisplayOn: Bool) -> [NSMenuItem] {
+    func menuItems(mode: Mode, keepDisplayOn: Bool, lidClosed: Bool = false) -> [NSMenuItem] {
         let settings = menuItem("Settings…", "gear", #selector(openSettings))
         settings.keyEquivalent = ","
         let quit = menuItem("Quit Awake", "xmark.rectangle", #selector(quit))
         quit.keyEquivalent = "q"
-        return quickSettingItems(mode: mode, keepDisplayOn: keepDisplayOn) + [.separator(), settings, quit]
+        return quickSettingItems(mode: mode, keepDisplayOn: keepDisplayOn, lidClosed: lidClosed) + [.separator(), settings, quit]
     }
 
     private func menuItem(_ title: String, _ symbol: String, _ action: Selector) -> NSMenuItem {
@@ -156,11 +156,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         return item
     }
 
-    func quickSettingItems(mode: Mode, keepDisplayOn: Bool) -> [NSMenuItem] {
+    func quickSettingItems(mode: Mode, keepDisplayOn: Bool, lidClosed: Bool = false) -> [NSMenuItem] {
         let awake = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
         awake.state = mode == .off ? .off : .on
         let display = menuItem("Keep display on", "display", #selector(toggleKeepDisplayOn))
-        display.state = keepDisplayOn ? .on : .off
+        display.state = keepDisplayOn && !lidClosed ? .on : .off
+        display.isEnabled = !lidClosed
         return [awake, display]
     }
 
@@ -180,7 +181,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     func setKeepDisplayOn(_ on: Bool) {
         guard !uninstalling && paths.atRequiredLocation else { return }
-        Store.setKeepDisplayOn(on)
+        Store.setKeepDisplayOn(on && !System.rootDomain().lidClosed)
         refresh()
         reconcileInBackground()
     }
@@ -448,6 +449,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     private func updateDisplay(_ s: Snapshot) {
+        if s.lidClosed && Store.keepDisplayOn() { Store.setKeepDisplayOn(false) }
         display.update(paths.atRequiredLocation && !uninstalling && s.decision.displayAwake)
         model.displayAwake = display.active
         model.displayError = display.error
@@ -564,10 +566,18 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         if let port = IONotificationPortCreate(kIOMainPortDefault) {
             IONotificationPortSetDispatchQueue(port, .main)
             let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceNameMatching("IOPMrootDomain"))
-            IOServiceAddInterestNotification(port, root, kIOGeneralInterest, { context, _, message, _ in
+            IOServiceAddInterestNotification(port, root, kIOGeneralInterest, { context, _, message, argument in
                 guard message == clamshellStateChange, let context else { return }
                 let app = Unmanaged<MenuApp>.fromOpaque(context).takeUnretainedValue()
-                MainActor.assumeIsolated { app.reconcileInBackground() }
+                MainActor.assumeIsolated {
+                    // Use the event's state so even a quick close/open clears the preference before sleep.
+                    if UInt(bitPattern: argument) & UInt(kClamshellStateBit) != 0 {
+                        Store.setKeepDisplayOn(false)
+                        app.display.update(false)
+                    }
+                    app.refresh()
+                    app.reconcileInBackground()
+                }
             }, context, &lidNotifier)
             IOObjectRelease(root)
             lidPort = port

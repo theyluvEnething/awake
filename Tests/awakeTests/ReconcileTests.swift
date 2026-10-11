@@ -56,7 +56,9 @@ import Testing
                 saved = try! JSONDecoder().decode(Status.self, from: JSONEncoder().encode(value))
             }
             static func mode() -> ModeState? { selected }
-            static func keepDisplayOn() -> Bool { false }
+            static var displayOn = false
+            static func keepDisplayOn() -> Bool { displayOn }
+            static func setKeepDisplayOn(_ on: Bool) { displayOn = on }
             static func release() -> (until: Double, boot: String?)? { nil }
             static func leases() -> [(name: String, lease: Lease)] { [] }
             static func lease(_ name: String) -> Lease? { nil }
@@ -83,6 +85,21 @@ import Testing
             Store.saved = Status(awake: true, flag: true, loggedAt: Date().timeIntervalSince1970)
             Store.logs = []
         }
+
+        reset()
+        System.closed = false
+        Store.displayOn = true
+        check("display requested with lid open", Snapshot.take().decision.displayAwake)
+        System.closed = true
+        check("closed lid suppresses display before reconcile", !Snapshot.take().decision.displayAwake)
+        Reconcile.run()
+        check("closed lid clears display preference", !Store.displayOn)
+        System.closed = false
+        Reconcile.run()
+        check("reopening leaves display off", !Snapshot.take().decision.displayAwake && !Store.displayOn)
+        Store.displayOn = true
+        check("explicit reactivation works", Snapshot.take().decision.displayAwake)
+        Store.displayOn = false
 
         reset()
         System.immediate = true

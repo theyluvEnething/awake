@@ -79,8 +79,9 @@ struct SettingsView: View {
                     Row(Format.mode(.on), detail: "Until you turn it off, restart or log out.")
                 }
                 Toggle(isOn: Binding(get: { s.inputs.keepDisplayOn }, set: setKeepDisplayOn)) {
-                    Row("Keep display on", detail: "Prevent idle dimming and display sleep.")
+                    Row("Keep display on", detail: "Prevent idle dimming and display sleep until you close the lid.")
                 }
+                .disabled(s.lidClosed)
             }
 
             Panel("Now") {

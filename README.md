@@ -51,8 +51,9 @@ or its helper needs setup.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out.
 - **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
-  including while the lid mode is Off. It has no timer: turn it off or quit Awake
-  to restore normal display sleep.
+  including while the lid mode is Off. Closing the lid turns it off and disables
+  the control. After reopening the lid, turn it on again when needed. Turning it
+  off or quitting Awake also restores normal display sleep.
 
 Awake releases its holds at 20% battery unless charging, until the battery
 recovers above 25%. It also releases them at 40 °C battery temperature, until
