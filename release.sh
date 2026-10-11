@@ -165,7 +165,7 @@ echo "verified app version $version ($build), signatures, architectures, icon an
 notarize() {
   local artifact="$1" label="$2" result status id submitted=true
   result="$dist/notary-$label.json"
-  if ! xcrun notarytool submit "$artifact" "${notary_auth[@]}" --wait --output-format json > "$result"; then
+  if ! xcrun notarytool submit "$artifact" "${notary_auth[@]}" --no-s3-acceleration --wait --output-format json > "$result"; then
     submitted=false
   fi
   cat "$result"
