@@ -41,9 +41,10 @@ count. A running turn is checked every five seconds and gets the same one-minute
 grace period when it ends. T3 0.0.45's session format is supported; Settings shows
 when monitoring is unavailable. Remote environments are not monitored by the Mac.
 
-The menu-bar cup shows what closing the lid does: an outline cup sleeps, a
-filled cup keeps running, and a badge means lid sleep was changed outside Awake
-or its helper needs setup.
+The menu-bar cup shows the selected mode immediately: an outline cup for Off,
+a filled cup for Awake, and a filled cup with steam for Stay awake indefinitely.
+The tooltip shows the current sleep state. A badge means lid sleep was changed
+outside Awake or its helper needs setup.
 
 - **Awake** keeps the Mac running with its lid closed while Claude or Codex works.
   Unticked, the mode is Off. Turning it on reveals **Stay awake indefinitely**

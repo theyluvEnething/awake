@@ -3,6 +3,26 @@ import Testing
 @testable import awake
 
 @MainActor struct QuickSettingsTests {
+    @Test func cupIconsDistinguishAllThreeModesWithoutChangingTheirSize() throws {
+        for render in [
+            { Glyph.status(mode: $0, warning: false) },
+            { Glyph.status(mode: $0, warning: true) },
+            { Glyph.menu(mode: $0) },
+        ] as [(Mode) -> NSImage] {
+            let icons = [Mode.off, .auto, .on].map(render)
+            let pixels = try icons.map { try #require($0.tiffRepresentation) }
+            #expect(Set(pixels).count == 3)
+            for icon in icons {
+                #expect(icon.isTemplate)
+                #expect(icon.size == icons[0].size)
+            }
+        }
+        for mode in [Mode.off, .auto, .on] {
+            #expect(Glyph.status(mode: mode, warning: false).tiffRepresentation
+                != Glyph.status(mode: mode, warning: true).tiffRepresentation)
+        }
+    }
+
     @Test func maintenanceActionsAreOnlyAvailableThroughSettings() throws {
         let app = MenuApp()
         let items = app.menuItems(mode: .auto, keepDisplayOn: false).filter { !$0.isSeparatorItem }

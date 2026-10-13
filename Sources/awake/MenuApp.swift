@@ -122,7 +122,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         menu.removeAllItems()
 
         let header = NSMenuItem(title: "Awake", action: nil, keyEquivalent: "")
-        header.image = Glyph.menu(flag: s.flag)
+        header.image = Glyph.menu(mode: s.decision.mode)
         header.subtitle = summary(s)
         header.isEnabled = false
         menu.addItem(header)
@@ -458,7 +458,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         model.snapshot = s
         updateDisplay(s)
         let warning = warning(s)
-        item.button?.image = Glyph.status(flag: s.flag, warning: warning != nil)
+        item.button?.image = Glyph.status(mode: s.decision.mode, warning: warning != nil)
         item.button?.toolTip = "Awake: " + (warning ?? summary(s))
     }
 
@@ -621,12 +621,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 }
 
-/// The cup in the menu bar: outline when closing the lid would sleep, filled when it keeps the Mac
-/// running, with a warning mark when something is off.
+/// The selected mode: outline for Off, filled for Awake, steaming for Stay awake indefinitely.
+/// Actual sleep state remains in the tooltip; helper and power-setting problems add a warning badge.
 @MainActor
 enum Glyph {
-    static func status(flag: Bool, warning: Bool) -> NSImage {
-        let base = symbol(flag ? "cup.and.saucer.fill" : "cup.and.saucer", size: 15)
+    static func status(mode: Mode, warning: Bool) -> NSImage {
+        let base = cup(mode: mode, size: 15)
         guard warning else { return base }
         let badge = symbol("exclamationmark.circle.fill", size: 8)
         let image = NSImage(size: base.size, flipped: false) { rect in
@@ -643,8 +643,35 @@ enum Glyph {
         return image
     }
 
-    static func menu(flag: Bool) -> NSImage {
-        symbol(flag ? "cup.and.saucer.fill" : "cup.and.saucer", size: 13)
+    static func menu(mode: Mode) -> NSImage {
+        cup(mode: mode, size: 13)
+    }
+
+    private static func cup(mode: Mode, size: CGFloat) -> NSImage {
+        let base = symbol(mode == .off ? "cup.and.saucer" : "cup.and.saucer.fill", size: size)
+        let scale = size / 15
+        // Reserve the same space in every mode so the cup does not move when steam appears.
+        let image = NSImage(size: NSSize(width: base.size.width, height: base.size.height + 4 * scale), flipped: false) { _ in
+            base.draw(at: .zero, from: .zero, operation: .sourceOver, fraction: 1)
+            if mode == .on {
+                NSColor.black.setStroke()
+                for position in [0.30, 0.46, 0.62] {
+                    let x = base.size.width * position
+                    let y = base.size.height - 0.5 * scale
+                    let steam = NSBezierPath()
+                    steam.lineWidth = scale
+                    steam.lineCapStyle = .round
+                    steam.move(to: NSPoint(x: x, y: y))
+                    steam.curve(to: NSPoint(x: x, y: y + 3.5 * scale),
+                                controlPoint1: NSPoint(x: x - scale, y: y + scale),
+                                controlPoint2: NSPoint(x: x + scale, y: y + 2.5 * scale))
+                    steam.stroke()
+                }
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     private static func symbol(_ name: String, size: CGFloat) -> NSImage {
