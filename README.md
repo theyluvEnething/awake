@@ -46,10 +46,11 @@ filled cup keeps running, and a badge means lid sleep was changed outside Awake
 or its helper needs setup.
 
 - **Awake** keeps the Mac running with its lid closed while Claude or Codex works.
-  Unticked, the mode is Off.
+  Unticked, the mode is Off. Turning it on reveals **Stay awake indefinitely**
+  underneath it in the menu.
 - **Settings…** groups wake controls, Activity and app maintenance.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
-  or log out.
+  or log out. This control is disabled while Awake is off.
 - **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
   including while the lid mode is Off. Closing the lid turns it off and disables
   the control. After reopening the lid, turn it on again when needed. Turning it

@@ -78,6 +78,7 @@ struct SettingsView: View {
                 Toggle(isOn: Binding(get: { d.mode == .on }, set: setIndefinitely)) {
                     Row(Format.mode(.on), detail: "Until you turn it off, restart or log out.")
                 }
+                .disabled(d.mode == .off)
                 Toggle(isOn: Binding(get: { s.inputs.keepDisplayOn }, set: setKeepDisplayOn)) {
                     Row("Keep display on", detail: "Prevent idle dimming and display sleep until you close the lid.")
                 }
@@ -290,10 +291,13 @@ struct Row: View {
 
 /// Mac switches hug their labels; these sit at the row's trailing edge, as in AdBlock.
 private struct TrailingSwitch: ToggleStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 16) {
             configuration.label
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(isEnabled ? 1 : 0.45)
                 .accessibilityHidden(true)
             Toggle(configuration)
                 .labelsHidden()

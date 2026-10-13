@@ -159,14 +159,25 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     func quickSettingItems(mode: Mode, keepDisplayOn: Bool, lidClosed: Bool = false) -> [NSMenuItem] {
         let awake = menuItem(Format.mode(.auto), "sun.max", #selector(toggleAwake))
         awake.state = mode == .off ? .off : .on
+        var items = [awake]
+        if mode != .off {
+            let indefinitely = menuItem(Format.mode(.on), "infinity", #selector(toggleIndefinitely))
+            indefinitely.state = mode == .on ? .on : .off
+            indefinitely.indentationLevel = 1
+            items.append(indefinitely)
+        }
         let display = menuItem("Keep display on", "display", #selector(toggleKeepDisplayOn))
         display.state = keepDisplayOn && !lidClosed ? .on : .off
         display.isEnabled = !lidClosed
-        return [awake, display]
+        return items + [display]
     }
 
     @objc private func toggleAwake() {
         setAwake(Snapshot.take().decision.mode == .off)
+    }
+
+    @objc private func toggleIndefinitely() {
+        setIndefinitely(Snapshot.take().decision.mode != .on)
     }
 
     @objc private func toggleKeepDisplayOn() { setKeepDisplayOn(!Store.keepDisplayOn()) }
@@ -176,7 +187,10 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     }
 
     func setIndefinitely(_ on: Bool) {
-        change { on ? Store.setMode(.on) : Store.endOn() }
+        change {
+            guard Snapshot.take().decision.mode != .off else { return }
+            on ? Store.setMode(.on) : Store.endOn()
+        }
     }
 
     func setKeepDisplayOn(_ on: Bool) {
