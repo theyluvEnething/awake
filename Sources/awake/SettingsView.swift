@@ -7,7 +7,7 @@ final class AwakeModel {
     var snapshot: Snapshot
     var displayAwake = false
     var displayError: String?
-    var samples = ActivityHistory.load()
+    var samples: [ActivitySample] = []
     var t3 = T3Monitor.State()
 
     init(snapshot: Snapshot) {

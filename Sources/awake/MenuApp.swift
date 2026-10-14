@@ -23,6 +23,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var setupModel: SetupModel?
     private var setupTimer: Timer?
     private var reconcileTask: Task<Void, Never>?
+    /// When the activity history in `model.samples` was written.
+    private var historyStamp: Double?
+    /// Only the windows show the history and `model.t3`, so they are read only while one is open.
+    private var wantsHistory: Bool { window != nil || activityWindow != nil }
+    private struct Shown: Equatable { var mode: Mode, warning: Bool }
+    private var shown: Shown?
     private var reconcilePending = false
     private var retryHelperPending = false
     private var uninstalling = false
@@ -72,9 +78,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
         }
         refreshTimer?.tolerance = 10
+        // Only while T3's server runs: a stopped server's leases end on the 30-second reconcile, since
+        // their pid no longer matches the server.
         t3Timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                if FileManager.default.fileExists(atPath: T3Monitor.base.path) {
+                if T3Monitor.server() != nil {
                     self?.reconcileInBackground()
                 }
             }
@@ -216,18 +224,26 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             window = makeWindow(view)
         }
         refresh()
+        reconcileInBackground() // also loads the activity history the window shows
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
         guard let closing = notification.object as? NSWindow else { return }
-        if closing === activityWindow { activityWindow = nil; return }
-        guard closing === window else { return }
-        setupTimer?.invalidate()
-        setupTimer = nil
-        setupModel = nil
-        window = nil
+        if closing === activityWindow {
+            activityWindow = nil
+        } else if closing === window {
+            setupTimer?.invalidate()
+            setupTimer = nil
+            setupModel = nil
+            window = nil
+        }
+        // Without a window nothing shows the history; the next window loads it again.
+        if !wantsHistory {
+            model.samples = []
+            historyStamp = nil
+        }
     }
 
     private func openActivity() {
@@ -241,6 +257,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             activityWindow?.minSize = NSSize(width: 700, height: 640)
             activityWindow?.center()
         }
+        reconcileInBackground()
         NSApp.activate()
         activityWindow?.makeKeyAndOrderFront(nil)
     }
@@ -458,8 +475,14 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         model.snapshot = s
         updateDisplay(s)
         let warning = warning(s)
-        item.button?.image = Glyph.status(mode: s.decision.mode, warning: warning != nil)
-        item.button?.toolTip = "Awake: " + (warning ?? summary(s))
+        // Setting the image redraws the system menu bar, so only on a change.
+        let glyph = Shown(mode: s.decision.mode, warning: warning != nil)
+        if glyph != shown {
+            item.button?.image = Glyph.status(mode: glyph.mode, warning: glyph.warning)
+            shown = glyph
+        }
+        let tip = "Awake: " + (warning ?? summary(s))
+        if item.button?.toolTip != tip { item.button?.toolTip = tip }
     }
 
     private func updateDisplay(_ s: Snapshot) {
@@ -506,6 +529,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             retryHelperPending = retryHelperPending || retryFailures
             return
         }
+        let historyStamp = self.historyStamp, wantsHistory = self.wantsHistory
         reconcileTask = Task { [weak self] in
             let result = await Task.detached(priority: .utility) {
                 let status: Status?
@@ -514,13 +538,17 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                 } else {
                     status = Reconcile.run()
                 }
-                return (status, ActivityHistory.load(), T3Monitor.read())
+                return (status, wantsHistory ? ActivityHistory.loadIfChanged(since: historyStamp) : nil,
+                        wantsHistory ? T3Monitor.read() : nil)
             }.value
             guard let self else { return }
             reconcileTask = nil
             setupModel?.powerError = result.0?.error
-            model.samples = result.1
-            model.t3 = result.2
+            if let history = result.1 {
+                self.historyStamp = history.stamp
+                model.samples = history.samples
+            }
+            if let t3 = result.2 { model.t3 = t3 }
             refresh()
             if reconcilePending {
                 let retry = retryHelperPending

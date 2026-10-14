@@ -35,6 +35,12 @@ enum ActivityRange: String, CaseIterable, Identifiable {
     func samples(_ samples: [ActivitySample], now: Double) -> [ActivitySample] {
         samples.filter { $0.timestamp >= now - seconds && $0.timestamp <= now }
     }
+
+    /// Seconds per drawn point: about 600 points across the range, never finer than one sample a minute.
+    var bucket: Double { seconds / 600 }
+
+    /// Dots for each sample only where they can be told apart.
+    var marksSamples: Bool { self == .hour || self == .sixHours }
 }
 
 enum ActivityMetric: String, CaseIterable, Identifiable {
@@ -45,7 +51,19 @@ enum ActivityMetric: String, CaseIterable, Identifiable {
         var sample: ActivitySample
         var value: Double
         var segment: Int
+        /// The only point of its segment: a line can't show it, so the chart draws a dot.
+        var alone = false
         var id: Double { sample.timestamp }
+    }
+
+    private static func markAlone(_ points: [Point]) -> [Point] {
+        var counts: [Int: Int] = [:]
+        for point in points { counts[point.segment, default: 0] += 1 }
+        return points.map { point in
+            var point = point
+            point.alone = counts[point.segment] == 1
+            return point
+        }
     }
 
     func value(_ sample: ActivitySample) -> Double? {
@@ -66,7 +84,27 @@ enum ActivityMetric: String, CaseIterable, Identifiable {
             points.append(Point(sample: sample, value: value, segment: segment))
             last = sample.timestamp
         }
-        return points
+        return Self.markAlone(points)
+    }
+
+    /// One point per `bucket` seconds, so a week draws a few hundred points instead of ten thousand.
+    /// Temperature and thermal state keep each bucket's highest value, so spikes stay visible; battery
+    /// keeps the latest. Gaps stay gaps.
+    func points(_ samples: [ActivitySample], bucket: Double) -> [Point] {
+        let all = points(samples)
+        guard bucket > 60 else { return all }
+        var kept: [Point] = []
+        var key: (segment: Int, bucket: Double)?
+        for point in all {
+            let current = (segment: point.segment, bucket: (point.sample.timestamp / bucket).rounded(.down))
+            if let key, key == current, let previous = kept.last {
+                if self == .battery || point.value >= previous.value { kept[kept.count - 1] = point }
+            } else {
+                kept.append(point)
+                key = current
+            }
+        }
+        return Self.markAlone(kept)
     }
 }
 
@@ -84,8 +122,24 @@ enum ActivityHistory {
         return Array(samples.suffix(maximumCount))
     }
 
+    /// When the history file was last written, in seconds since 1970.
+    static func modified(at file: URL = file) -> Double? {
+        ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date)?
+            .timeIntervalSince1970
+    }
+
+    /// The history and its write time, or nil when the file hasn't changed since `stamp` or is missing.
+    /// The menu reloads with this after each reconcile, so seven days are decoded once a minute at most.
+    static func loadIfChanged(since stamp: Double?, at file: URL = file) -> (stamp: Double, samples: [ActivitySample])? {
+        guard let modified = modified(at: file), modified != stamp else { return nil }
+        return (modified, load(at: file))
+    }
+
     static func record(_ sample: ActivitySample, at file: URL = file) throws {
         guard sample.timestamp.isFinite else { return }
+        // Hooks, the menu and launchd reconcile every few seconds; a new sample is due once a minute.
+        // Skip decoding seven days of history while the last write is under a minute old.
+        if let written = modified(at: file), (0..<60).contains(sample.timestamp - written) { return }
         let previous = load(at: file)
         var samples = previous.filter { $0.timestamp > sample.timestamp - retention && $0.timestamp <= sample.timestamp }
         if sample.timestamp - (samples.last?.timestamp ?? -.infinity) >= 60 {

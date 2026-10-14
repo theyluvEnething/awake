@@ -71,7 +71,9 @@ over time. **Open in separate window** shows a larger, resizable activity monito
 with one-hour, six-hour, one-day and seven-day ranges, values at recorded moments,
 minimum/maximum values and access to the text log. Awake records once a minute and
 keeps seven days locally across restarts. Gaps during sleep and unavailable sensors
-remain gaps. Uninstall removes this history with the rest of Awake's state.
+remain gaps. The one-day and seven-day ranges draw about 600 points, keeping the
+highest temperature and thermal state of each stretch; the graphs redraw when a
+sample arrives. Uninstall removes this history with the rest of Awake's state.
 
 ## Command line
 

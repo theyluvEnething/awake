@@ -8,8 +8,12 @@ struct ActivityView: View {
     @State private var range = ActivityRange.hour
     @State private var selectedTime: Date?
 
+    /// The snapshot changes every few seconds; samples arrive once a minute. Ending the range on the
+    /// next whole minute keeps the charts unchanged, and undrawn, between samples.
+    private var now: Double { (model.snapshot.inputs.now / 60).rounded(.up) * 60 }
+
     private var samples: [ActivitySample] {
-        range.samples(model.samples, now: model.snapshot.inputs.now)
+        range.samples(model.samples, now: now)
     }
 
     private var selected: ActivitySample? {
@@ -43,8 +47,9 @@ struct ActivityView: View {
 
             Panel {
                 ForEach(ActivityMetric.allCases) { metric in
-                    MetricChart(metric: metric, samples: samples, selected: selected, selectedTime: $selectedTime,
-                                range: range, now: model.snapshot.inputs.now, expanded: expanded)
+                    MetricChart(metric: metric, samples: samples, selected: selected, selectedTime: selectedTime,
+                                range: range, now: now, expanded: expanded, select: { selectedTime = $0 })
+                        .equatable()
                 }
             }
 
@@ -74,16 +79,25 @@ struct ActivityView: View {
     }
 }
 
-private struct MetricChart: View {
+/// Equatable without `select`, so SwiftUI redraws a chart only when what it shows changes.
+private struct MetricChart: View, Equatable {
     let metric: ActivityMetric
     let samples: [ActivitySample]
     let selected: ActivitySample?
-    @Binding var selectedTime: Date?
+    let selectedTime: Date?
     let range: ActivityRange
     let now: Double
     let expanded: Bool
+    let select: (Date?) -> Void
 
-    private var points: [ActivityMetric.Point] { metric.points(samples) }
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.metric == b.metric && a.selected == b.selected && a.selectedTime == b.selectedTime && a.range == b.range
+            && a.now == b.now && a.expanded == b.expanded && a.samples == b.samples
+    }
+
+    private var points: [ActivityMetric.Point] { metric.points(samples, bucket: range.bucket) }
+    /// Every recorded value, for the minimum and maximum, which drawn points may skip.
+    private var values: [Double] { samples.compactMap(metric.value) }
     private var color: Color {
         switch metric {
         case .battery: .green
@@ -94,7 +108,7 @@ private struct MetricChart: View {
     private var domain: ClosedRange<Double> {
         switch metric {
         case .battery: 0...100
-        case .temperature: min(20, floor(points.map(\.value).min() ?? 20) - 2)...max(45, ceil(points.map(\.value).max() ?? 45) + 2)
+        case .temperature: min(20, floor(values.min() ?? 20) - 2)...max(45, ceil(values.max() ?? 45) + 2)
         case .thermal: -0.2...3.2
         }
     }
@@ -107,7 +121,7 @@ private struct MetricChart: View {
                 Text(valueText(selected.flatMap(metric.value))).font(.system(size: 13, weight: .medium)).monospacedDigit()
             }
             chart.frame(height: expanded ? 130 : 86)
-            if expanded, let minimum = points.map(\.value).min(), let maximum = points.map(\.value).max() {
+            if expanded, let minimum = values.min(), let maximum = values.max() {
                 Text("Min \(valueText(minimum))   Max \(valueText(maximum))")
                     .font(.system(size: 11)).foregroundStyle(Palette.secondaryInk)
             }
@@ -122,8 +136,10 @@ private struct MetricChart: View {
                     .foregroundStyle(color)
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
                     .interpolationMethod(metric == .thermal ? .stepEnd : .linear)
-                PointMark(x: .value("Time", point.sample.date), y: .value(metric.rawValue, point.value))
-                    .foregroundStyle(color).symbolSize(8)
+                if range.marksSamples || point.alone {
+                    PointMark(x: .value("Time", point.sample.date), y: .value(metric.rawValue, point.value))
+                        .foregroundStyle(color).symbolSize(8)
+                }
             }
             if let selectedTime {
                 RuleMark(x: .value("Selected time", selectedTime))
@@ -163,9 +179,9 @@ private struct MetricChart: View {
                     case .active(let location):
                         if let frame = proxy.plotFrame {
                             let plot = geometry[frame]
-                            if plot.contains(location) { selectedTime = proxy.value(atX: location.x - plot.minX) }
+                            if plot.contains(location) { select(proxy.value(atX: location.x - plot.minX)) }
                         }
-                    case .ended: selectedTime = nil
+                    case .ended: select(nil)
                     }
                 }
             }
