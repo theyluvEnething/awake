@@ -63,7 +63,8 @@ below 36 °C, and at high or critical thermal state. With the lid closed on
 battery it switches to Low Power and restores your energy mode afterwards.
 The display option follows the same battery and heat guards. It uses a temporary
 macOS assertion and does not change your display settings. Power changes are logged to
-`~/Library/Logs/awake.log`.
+`~/Library/Logs/awake.log`. macOS 27 no longer reports the battery temperature
+to apps, so Awake reads the hottest of the battery's SMC sensors instead.
 
 Settings > Activity graphs battery level, battery temperature and thermal state
 over time. **Open in separate window** shows a larger, resizable activity monitor

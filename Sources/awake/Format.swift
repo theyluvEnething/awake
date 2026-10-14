@@ -70,11 +70,12 @@ enum Format {
         return ["\(b.level) %", power, b.temperature.map(degrees)].compactMap { $0 }.joined(separator: ", ")
     }
 
-    /// "raw 4612/6008 mAh, -9.8 W" for the log, or nil when the battery doesn't report it.
+    /// "raw 4612/6008 mAh, -9.8 W" for the log, either part only when the battery reports it.
     static func batteryRaw(_ b: Battery) -> String? {
-        guard let charge = b.rawCharge, let max = b.rawMax else { return nil }
+        let raw = b.rawCharge.flatMap { charge in b.rawMax.map { "raw \(charge)/\($0) mAh" } }
         let watts = b.watts.map { String(format: "%+.1f W", $0) }
-        return ["raw \(charge)/\(max) mAh", watts].compactMap { $0 }.joined(separator: ", ")
+        let parts = [raw, watts].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     static func thermal(_ t: Thermal) -> String {

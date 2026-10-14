@@ -31,6 +31,7 @@ private let now = 1_790_000_000.0
                  watts: -9.84), "raw 4612/6008 mAh, -9.8 W"),
         (Battery(level: 15, charging: true, external: true, temperature: 30, rawCharge: 842, rawMax: 6008,
                  watts: 55.9), "raw 842/6008 mAh, +55.9 W"),
+        (Battery(level: 30, charging: false, external: false, watts: -15.3), "-15.3 W"),
         (Battery(level: 15, charging: true, external: true, temperature: 30), nil),
     ] as [(Battery, String?)])
     func rawBatteryForTheLog(battery: Battery, text: String?) {

@@ -31,12 +31,21 @@ enum System {
               let max = property(service, "MaxCapacity") as? Int, max > 0 else { return nil }
         let millivolts = property(service, "Voltage") as? Int
         let milliamps = property(service, "InstantAmperage") as? Int
+        // macOS 27 dropped the raw capacities and the temperature; the charge is still in BatteryData
+        // and the temperature in the SMC.
+        var rawCharge = property(service, "AppleRawCurrentCapacity") as? Int
+        var rawMax = property(service, "AppleRawMaxCapacity") as? Int
+        if rawCharge == nil || rawMax == nil, let data = property(service, "BatteryData") as? [String: Any] {
+            rawCharge = rawCharge ?? data["RemainingCapacity"] as? Int
+            rawMax = rawMax ?? data["FullChargeCapacity"] as? Int
+        }
         return Battery(level: current * 100 / max,
                        charging: property(service, "IsCharging") as? Bool ?? false,
                        external: property(service, "ExternalConnected") as? Bool ?? false,
-                       temperature: (property(service, "Temperature") as? Int).map { Double($0) / 100 },
-                       rawCharge: property(service, "AppleRawCurrentCapacity") as? Int,
-                       rawMax: property(service, "AppleRawMaxCapacity") as? Int,
+                       temperature: (property(service, "Temperature") as? Int).map { Double($0) / 100 }
+                           ?? SMC.batteryTemperature(),
+                       rawCharge: rawCharge,
+                       rawMax: rawMax,
                        watts: millivolts.flatMap { v in milliamps.map { Double(v) * Double($0) / 1_000_000 } })
     }
 
