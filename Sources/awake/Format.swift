@@ -78,6 +78,19 @@ enum Format {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
+    // MARK: Display
+
+    /// Display sleep as Keep display on leaves it: off while Awake's assertion holds the display.
+    static func displaySleep(held: Bool, requested: Bool, pause: Pause?) -> String {
+        if held { return "Off: Keep display on prevents idle dimming and display sleep" }
+        guard requested else { return "On" }
+        if let pause { return "On: Keep display on is paused, \(Self.pause(pause))" }
+        return "On: Keep display on works while Awake's menu runs"
+    }
+
+    /// Added to the menu's summary and tooltip while Keep display on holds the display.
+    static let displayStaysOn = "the display stays on"
+
     static func thermal(_ t: Thermal) -> String {
         switch t {
         case .nominal: "Normal"

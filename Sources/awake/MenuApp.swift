@@ -27,7 +27,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var historyStamp: Double?
     /// Only the windows show the history and `model.t3`, so they are read only while one is open.
     private var wantsHistory: Bool { window != nil || activityWindow != nil }
-    private struct Shown: Equatable { var mode: Mode, warning: Bool }
+    private struct Shown: Equatable { var mode: Mode, warning: Bool, display: Bool }
     private var shown: Shown?
     private var reconcilePending = false
     private var retryHelperPending = false
@@ -111,7 +111,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !uninstalling else { return .terminateNow }
         restartingForUpdate = updates.restartRequested
-        display.end()
+        endDisplay(restartingForUpdate ? "restarting to update" : "Awake quit")
         if !restartingForUpdate {
             if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
             change { Store.setMode(.off) }
@@ -124,9 +124,8 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// Every item has an icon, as in macOS's own menus: Settings and Quit use the
     /// symbols of the Apple and app menus.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let s = Snapshot.take()
-        model.snapshot = s
-        updateDisplay(s)
+        refresh()
+        let s = model.snapshot
         menu.removeAllItems()
 
         let header = NSMenuItem(title: "Awake", action: nil, keyEquivalent: "")
@@ -476,9 +475,9 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         updateDisplay(s)
         let warning = warning(s)
         // Setting the image redraws the system menu bar, so only on a change.
-        let glyph = Shown(mode: s.decision.mode, warning: warning != nil)
+        let glyph = Shown(mode: s.decision.mode, warning: warning != nil, display: display.active)
         if glyph != shown {
-            item.button?.image = Glyph.status(mode: glyph.mode, warning: glyph.warning)
+            item.button?.image = Glyph.status(mode: glyph.mode, warning: glyph.warning, display: glyph.display)
             shown = glyph
         }
         let tip = "Awake: " + (warning ?? summary(s))
@@ -487,13 +486,40 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     private func updateDisplay(_ s: Snapshot) {
         if s.lidClosed && Store.keepDisplayOn() { Store.setKeepDisplayOn(false) }
+        let was = display.active
         display.update(paths.atRequiredLocation && !uninstalling && s.decision.displayAwake)
         model.displayAwake = display.active
         model.displayError = display.error
+        if display.active != was { logDisplay(s) }
+    }
+
+    /// One log line when the display hold starts or ends, so a drained battery can be traced to it.
+    private func logDisplay(_ s: Snapshot) {
+        let d = s.decision
+        let reason = s.lidClosed ? "lid closed" : !d.keepDisplayOn ? "Keep display on turned off"
+            : d.pause.map(Format.paused) ?? (d.released ? "logging out" : "Awake released it")
+        logDisplay((display.active ? "display sleep off  Keep display on" : "display sleep on   " + reason)
+            + (s.inputs.battery.map { "  (" + Format.battery($0) + ")" } ?? ""))
+    }
+
+    private func logDisplay(_ line: String) {
+        // Off the main thread: the lock can be busy while a reconcile waits for the helper.
+        Task.detached(priority: .utility) { _ = Store.withLock { Store.log(line) } }
+    }
+
+    /// Quit and logout end the hold without a refresh; log it before the process goes.
+    private func endDisplay(_ reason: String) {
+        if display.active, !uninstalling { _ = Store.withLock(timeout: 0.5) { Store.log("display sleep on   " + reason) } }
+        display.end()
     }
 
     private func summary(_ s: Snapshot) -> String {
         if let warning = warning(s) { return warning }
+        let lid = lidSummary(s)
+        return display.active ? lid + "; " + Format.displayStaysOn : lid
+    }
+
+    private func lidSummary(_ s: Snapshot) -> String {
         let d = s.decision
         if s.flag, let first = d.holds.first {
             return Format.hold(first, now: s.inputs.now) + (d.holds.count > 1 ? " +\(d.holds.count - 1)" : "")
@@ -614,8 +640,10 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                 MainActor.assumeIsolated {
                     // Use the event's state so even a quick close/open clears the preference before sleep.
                     if UInt(bitPattern: argument) & UInt(kClamshellStateBit) != 0 {
+                        let held = app.display.active
                         Store.setKeepDisplayOn(false)
                         app.display.update(false)
+                        if held && !app.display.active { app.logDisplay("display sleep on   lid closed") }
                     }
                     app.refresh()
                     app.reconcileInBackground()
@@ -639,7 +667,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// and so does the energy mode.
     private func loggingOut() {
         if paths.atRequiredLocation { Store.setKeepDisplayOn(false) }
-        display.end()
+        endDisplay("logging out")
         guard !uninstalling && paths.atRequiredLocation else { return }
         _ = Store.withLock(timeout: 2) {
             Store.endOn()
@@ -650,21 +678,32 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 }
 
 /// The selected mode: outline for Off, filled for Awake, steaming for Stay awake indefinitely.
-/// Actual sleep state remains in the tooltip; helper and power-setting problems add a warning badge.
+/// Actual sleep state remains in the tooltip; helper and power-setting problems add a warning badge,
+/// and a dot at the top left shows that Keep display on holds the display, in any mode.
 @MainActor
 enum Glyph {
-    static func status(mode: Mode, warning: Bool) -> NSImage {
+    static func status(mode: Mode, warning: Bool, display: Bool = false) -> NSImage {
         let base = cup(mode: mode, size: 15)
-        guard warning else { return base }
+        guard warning || display else { return base }
         let badge = symbol("exclamationmark.circle.fill", size: 8)
         let image = NSImage(size: base.size, flipped: false) { rect in
             base.draw(in: rect)
-            let b = NSRect(x: rect.maxX - badge.size.width, y: rect.maxY - badge.size.height,
-                           width: badge.size.width, height: badge.size.height)
-            NSGraphicsContext.current?.compositingOperation = .destinationOut
-            NSBezierPath(ovalIn: b.insetBy(dx: -1.5, dy: -1.5)).fill()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
-            badge.draw(in: b)
+            if display {
+                let dot = NSRect(x: rect.minX + 0.5, y: rect.maxY - 5, width: 4.5, height: 4.5)
+                NSGraphicsContext.current?.compositingOperation = .destinationOut
+                NSBezierPath(ovalIn: dot.insetBy(dx: -1.5, dy: -1.5)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                NSColor.black.setFill()
+                NSBezierPath(ovalIn: dot).fill()
+            }
+            if warning {
+                let b = NSRect(x: rect.maxX - badge.size.width, y: rect.maxY - badge.size.height,
+                               width: badge.size.width, height: badge.size.height)
+                NSGraphicsContext.current?.compositingOperation = .destinationOut
+                NSBezierPath(ovalIn: b.insetBy(dx: -1.5, dy: -1.5)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                badge.draw(in: b)
+            }
             return true
         }
         image.isTemplate = true

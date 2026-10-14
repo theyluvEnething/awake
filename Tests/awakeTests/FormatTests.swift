@@ -27,6 +27,16 @@ private let now = 1_790_000_000.0
     }
 
     @Test(arguments: [
+        (true, true, nil, "Off: Keep display on prevents idle dimming and display sleep"),
+        (false, false, nil, "On"),
+        (false, true, Pause.battery(18), "On: Keep display on is paused, battery at 18 %"),
+        (false, true, nil, "On: Keep display on works while Awake's menu runs"),
+    ] as [(Bool, Bool, Pause?, String)])
+    func displaySleep(held: Bool, requested: Bool, pause: Pause?, text: String) {
+        #expect(Format.displaySleep(held: held, requested: requested, pause: pause) == text)
+    }
+
+    @Test(arguments: [
         (Battery(level: 80, charging: false, external: false, temperature: 30, rawCharge: 4612, rawMax: 6008,
                  watts: -9.84), "raw 4612/6008 mAh, -9.8 W"),
         (Battery(level: 15, charging: true, external: true, temperature: 30, rawCharge: 842, rawMax: 6008,

@@ -44,7 +44,8 @@ when monitoring is unavailable. Remote environments are not monitored by the Mac
 The menu-bar cup shows the selected mode immediately: an outline cup for Off,
 a filled cup for Awake, and a filled cup with steam for Stay awake indefinitely.
 The tooltip shows the current sleep state. A badge means lid sleep was changed
-outside Awake or its helper needs setup.
+outside Awake or its helper needs setup. A dot at the cup's top left means
+Keep display on is holding the display, in any mode.
 
 - **Awake** keeps the Mac running with its lid closed while Claude or Codex works.
   Unticked, the mode is Off. Turning it on reveals **Stay awake indefinitely**
@@ -55,7 +56,8 @@ outside Awake or its helper needs setup.
 - **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
   including while the lid mode is Off. Closing the lid turns it off and disables
   the control. After reopening the lid, turn it on again when needed. Turning it
-  off or quitting Awake also restores normal display sleep.
+  off or quitting Awake also restores normal display sleep. The tooltip,
+  `awake status` and the log show when it holds the display.
 
 Awake releases its holds at 20% battery unless charging, until the battery
 recovers above 25%. It also releases them at 40 °C battery temperature, until
@@ -86,7 +88,7 @@ Add this repository's `bin/` directory to PATH, or call
 | `awake for 90m` | Keep it running for a duration, such as `90s`, `2h` or `1h30m`. |
 | `awake stop` | End every `run` and `for` hold. |
 | `awake set off\|auto\|on` | Choose Off, Awake or Stay awake indefinitely. |
-| `awake status` | Show mode, lid sleep, holds, battery, thermal state and Low Power. |
+| `awake status` | Show mode, lid sleep, display sleep, holds, battery, thermal state and Low Power. |
 
 ## Distribution and permissions
 

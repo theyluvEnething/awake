@@ -23,6 +23,20 @@ import Testing
         }
     }
 
+    @Test func theMenuBarIconShowsWhenTheDisplayIsHeldInEveryMode() throws {
+        for mode in [Mode.off, .auto, .on] {
+            let variants = [(false, false), (false, true), (true, false), (true, true)].map {
+                Glyph.status(mode: mode, warning: $0.0, display: $0.1)
+            }
+            let pixels = try variants.map { try #require($0.tiffRepresentation) }
+            #expect(Set(pixels).count == 4)
+            for icon in variants {
+                #expect(icon.isTemplate)
+                #expect(icon.size == variants[0].size)
+            }
+        }
+    }
+
     @Test func maintenanceActionsAreOnlyAvailableThroughSettings() throws {
         let app = MenuApp()
         let items = app.menuItems(mode: .auto, keepDisplayOn: false).filter { !$0.isSeparatorItem }

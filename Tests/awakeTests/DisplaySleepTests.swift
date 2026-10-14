@@ -25,6 +25,16 @@ import Testing
         #expect(!display.active)
     }
 
+    @Test func statusSeesTheAssertionThisProcessHolds() {
+        let display = DisplaySleep()
+        #expect(!DisplaySleep.held(by: getpid()))
+        display.update(true)
+        #expect(DisplaySleep.held(by: getpid()))
+        #expect(DisplaySleep.held())
+        display.update(false)
+        #expect(!DisplaySleep.held(by: getpid()))
+    }
+
     @Test func destroyingTheOwnerReleasesItsAssertion() throws {
         var display: DisplaySleep? = DisplaySleep()
         display?.update(true)
