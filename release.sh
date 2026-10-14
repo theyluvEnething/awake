@@ -214,7 +214,8 @@ ln -s /Applications "$stage/Applications"
 # A check build never carries the release's name, so it can't be uploaded by mistake.
 dmg="$dist/Awake-$version.dmg"
 if "$skip_notarize"; then dmg="$dist/Awake-$version-unnotarized.dmg"; fi
-hdiutil create -volname Awake -fs HFS+ -format UDZO -srcfolder "$stage" "$dmg"
+# macOS 27.0.1's hdiutil writes a corrupt compressed HFS+ image of this app; APFS images verify and mount.
+hdiutil create -volname Awake -fs APFS -format UDZO -srcfolder "$stage" "$dmg"
 codesign --force --sign "$identity" --identifier "$app_id.dmg" --timestamp "$dmg"
 codesign --verify --strict --verbose=2 "$dmg"
 if ! "$skip_notarize"; then
