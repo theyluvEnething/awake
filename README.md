@@ -53,8 +53,11 @@ Keep display on is holding the display, in any mode.
 - **Settings…** groups wake controls, Activity and app maintenance.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out. This control is disabled while Awake is off.
-- **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep,
-  including while the lid mode is Off. Closing the lid turns it off and disables
+- **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep
+  while the Mac is plugged in, including while the lid mode is Off. On battery the display
+  sleeps as usual and the hold returns when you plug in again, unless **Even on battery**
+  in Settings is on. That option can only be changed while Keep display on is on, and it
+  stays as you set it. Closing the lid turns Keep display on off and disables
   the control. After reopening the lid, turn it on again when needed. Turning it
   off or quitting Awake also restores normal display sleep. The tooltip,
   `awake status` and the log show when it holds the display.

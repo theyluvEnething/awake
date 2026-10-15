@@ -207,6 +207,12 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         reconcileInBackground()
     }
 
+    func setKeepDisplayOnBattery(_ on: Bool) {
+        guard !uninstalling && paths.atRequiredLocation else { return }
+        Store.setKeepDisplayOnBattery(on)
+        refresh()
+    }
+
     @objc func openSettings() {
         guard !uninstalling else { return }
         guard Setup.snapshot(paths: paths).complete else {
@@ -218,6 +224,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let view = SettingsView(model: model, updates: updates, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
                                     setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) },
+                                    setKeepDisplayOnBattery: { [weak self] in self?.setKeepDisplayOnBattery($0) },
                                     openActivity: { [weak self] in self?.openActivity() },
                                     uninstall: { [weak self] in self?.uninstall() })
             window = makeWindow(view)
@@ -497,7 +504,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private func logDisplay(_ s: Snapshot) {
         let d = s.decision
         let reason = s.lidClosed ? "lid closed" : !d.keepDisplayOn ? "Keep display on turned off"
-            : d.pause.map(Format.paused) ?? (d.released ? "logging out" : "Awake released it")
+            : d.displayUnplugged ? "unplugged" : d.pause.map(Format.paused) ?? (d.released ? "logging out" : "Awake released it")
         logDisplay((display.active ? "display sleep off  Keep display on" : "display sleep on   " + reason)
             + (s.inputs.battery.map { "  (" + Format.battery($0) + ")" } ?? ""))
     }

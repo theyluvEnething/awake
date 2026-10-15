@@ -59,6 +59,7 @@ import Testing
             static var displayOn = false
             static func keepDisplayOn() -> Bool { displayOn }
             static func setKeepDisplayOn(_ on: Bool) { displayOn = on }
+            static func keepDisplayOnBattery() -> Bool { false }
             static func release() -> (until: Double, boot: String?)? { nil }
             static func leases() -> [(name: String, lease: Lease)] { [] }
             static func lease(_ name: String) -> Lease? { nil }

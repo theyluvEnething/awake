@@ -114,7 +114,8 @@ enum Commands {
             ("Mode", Format.mode(d.mode)),
             ("Lid sleep", "\(Format.lidSleep(s.flag)): \(Format.lidEffect(s.flag))"),
             ("Lid", s.lidClosed ? "Closed" : "Open"),
-            ("Display sleep", Format.displaySleep(held: DisplaySleep.held(), requested: d.keepDisplayOn, pause: d.pause)),
+            ("Display sleep", Format.displaySleep(held: DisplaySleep.held(), requested: d.keepDisplayOn,
+                                                  unplugged: d.displayUnplugged, pause: d.pause)),
         ]
         let holds = d.holds.map { Format.hold($0, now: s.inputs.now) }
         rows.append(("T3 Code", T3Monitor.read().summary))

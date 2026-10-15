@@ -81,9 +81,10 @@ enum Format {
     // MARK: Display
 
     /// Display sleep as Keep display on leaves it: off while Awake's assertion holds the display.
-    static func displaySleep(held: Bool, requested: Bool, pause: Pause?) -> String {
+    static func displaySleep(held: Bool, requested: Bool, unplugged: Bool, pause: Pause?) -> String {
         if held { return "Off: Keep display on prevents idle dimming and display sleep" }
         guard requested else { return "On" }
+        if unplugged { return "On: Keep display on works while plugged in" }
         if let pause { return "On: Keep display on is paused, \(Self.pause(pause))" }
         return "On: Keep display on works while Awake's menu runs"
     }

@@ -27,13 +27,14 @@ private let now = 1_790_000_000.0
     }
 
     @Test(arguments: [
-        (true, true, nil, "Off: Keep display on prevents idle dimming and display sleep"),
-        (false, false, nil, "On"),
-        (false, true, Pause.battery(18), "On: Keep display on is paused, battery at 18 %"),
-        (false, true, nil, "On: Keep display on works while Awake's menu runs"),
-    ] as [(Bool, Bool, Pause?, String)])
-    func displaySleep(held: Bool, requested: Bool, pause: Pause?, text: String) {
-        #expect(Format.displaySleep(held: held, requested: requested, pause: pause) == text)
+        (true, true, false, nil, "Off: Keep display on prevents idle dimming and display sleep"),
+        (false, false, false, nil, "On"),
+        (false, true, true, Pause.battery(18), "On: Keep display on works while plugged in"),
+        (false, true, false, Pause.battery(18), "On: Keep display on is paused, battery at 18 %"),
+        (false, true, false, nil, "On: Keep display on works while Awake's menu runs"),
+    ] as [(Bool, Bool, Bool, Pause?, String)])
+    func displaySleep(held: Bool, requested: Bool, unplugged: Bool, pause: Pause?, text: String) {
+        #expect(Format.displaySleep(held: held, requested: requested, unplugged: unplugged, pause: pause) == text)
     }
 
     @Test(arguments: [

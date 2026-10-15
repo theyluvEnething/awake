@@ -122,6 +122,8 @@ struct Inputs: Sendable {
     var releaseUntil: Double?
     var releaseBoot: String? = nil
     var keepDisplayOn = false
+    /// Even on battery: Keep display on also holds the display while unplugged.
+    var displayOnBattery = false
 }
 
 /// Something that wants the Mac running with the lid closed.
@@ -154,6 +156,8 @@ enum Pause: Equatable, Sendable {
 struct Decision: Equatable, Sendable {
     var mode: Mode
     var keepDisplayOn = false
+    /// Keep display on waits because the Mac is unplugged and Even on battery is off.
+    var displayUnplugged = false
     var holds: [Hold] = []
     /// Only set while something holds the Mac or its display.
     var pause: Pause? = nil
@@ -163,7 +167,7 @@ struct Decision: Equatable, Sendable {
     var expired: [String] = []
 
     var awake: Bool { !holds.isEmpty && pause == nil && !released }
-    var displayAwake: Bool { keepDisplayOn && pause == nil && !released }
+    var displayAwake: Bool { keepDisplayOn && !displayUnplugged && pause == nil && !released }
 }
 
 enum EnergyAction: Equatable, Sendable {
@@ -189,6 +193,9 @@ enum Policy {
     static func decide(_ i: Inputs) -> Decision {
         let mode = effectiveMode(i.mode, boot: i.boot)
         var d = Decision(mode: mode, keepDisplayOn: i.keepDisplayOn)
+        // On battery the display sleeps as usual unless Even on battery is on. A Mac without a
+        // battery is always plugged in.
+        d.displayUnplugged = i.keepDisplayOn && !i.displayOnBattery && !(i.battery?.external ?? true)
         if mode == .on {
             d.holds.append(Hold(kind: .on, name: "on"))
         }
