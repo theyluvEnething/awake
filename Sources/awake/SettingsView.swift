@@ -191,12 +191,12 @@ struct SettingsView: View {
     }
 }
 
-/// The window's colours: the system's light look, and in dark mode AdBlock's black canvas with flat
+/// The window's colours: the system's light look, and in dark mode a charcoal canvas with flat
 /// panels and hairlines.
 @MainActor
 enum Palette {
     /// Also the window's background, so the title bar shows it.
-    static let canvas = dynamic(light: .white, dark: .black)
+    static let canvas = dynamic(light: .white, dark: hex(0x141416))
     static let card = Color(nsColor: dynamic(light: gray(0.973), dark: rgb(0.110, 0.110, 0.118)))
     static let line = Color(nsColor: dynamic(light: gray(0.937), dark: rgb(0.173, 0.173, 0.184)))
     static let ink = Color(nsColor: dynamic(light: .labelColor, dark: rgb(0.929, 0.933, 0.941)))
