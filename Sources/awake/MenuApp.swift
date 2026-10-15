@@ -231,8 +231,16 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         refresh()
         reconcileInBackground() // also loads the activity history the window shows
+        present(window)
+    }
+
+    /// The menu runs while another app is active, and macOS may turn down Awake's request to become
+    /// active. The window then opened behind that app's windows, which looked as if nothing happened.
+    /// Ordering it front regardless puts it on top either way; a click on it activates Awake.
+    private func present(_ window: NSWindow?) {
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
+        window?.orderFrontRegardless()
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -264,8 +272,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             activityWindow?.center()
         }
         reconcileInBackground()
-        NSApp.activate()
-        activityWindow?.makeKeyAndOrderFront(nil)
+        present(activityWindow)
     }
 
     private func makeWindow<Content: View>(_ view: Content, title: String = "Awake", resizable: Bool = false) -> NSWindow {
@@ -306,8 +313,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             }
         }
         refreshSetup()
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        present(window)
     }
 
     private func installSetup() {
@@ -452,10 +458,13 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         runAlert(alert)
     }
 
-    /// The menu runs while another app is active, so an alert would open behind its windows.
+    /// The menu runs while another app is active, so an alert would open behind its windows; see `present`.
     @discardableResult
     private func runAlert(_ alert: NSAlert) -> NSApplication.ModalResponse {
         NSApp.activate()
+        alert.layout()
+        alert.window.center()
+        alert.window.orderFrontRegardless()
         return alert.runModal()
     }
 
