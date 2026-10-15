@@ -38,8 +38,8 @@ T3 Code's local active turns are detected automatically while its server runs.
 Awake reads T3's session state without changing its settings or database. Turns
 waiting for approval or user input, completed turns and provider errors no longer
 count. A running turn is checked every five seconds and gets the same one-minute
-grace period when it ends. T3 0.0.45's session format is supported; Settings shows
-when monitoring is unavailable. Remote environments are not monitored by the Mac.
+grace period when it ends. T3 0.0.45's session format is supported; Settings > Activity
+shows T3's state and when monitoring is unavailable. Remote environments are not monitored by the Mac.
 
 The menu-bar cup shows the selected mode immediately: an outline cup for Off,
 a filled cup for Awake, and a filled cup with steam for Stay awake indefinitely.
@@ -71,8 +71,9 @@ macOS assertion and does not change your display settings. Power changes are log
 `~/Library/Logs/awake.log`. macOS 27 no longer reports the battery temperature
 to apps, so Awake reads the hottest of the battery's SMC sensors instead.
 
-Settings > Activity graphs battery level, battery temperature and thermal state
-over time. **Open in separate window** shows a larger, resizable activity monitor
+Settings > Activity graphs active agent turns, battery level, battery temperature and
+thermal state over time. The agents graph stacks the turns of Claude (orange), Codex (blue)
+and T3 Code (aqua) that ran during each minute, in any mode; its legend gives each count. **Open in separate window** shows a larger, resizable activity monitor
 with one-hour, six-hour, one-day and seven-day ranges, values at recorded moments,
 minimum/maximum values and access to the text log. Awake records once a minute and
 keeps seven days locally across restarts. Gaps during sleep and unavailable sensors

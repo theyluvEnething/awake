@@ -46,6 +46,10 @@ struct ActivityView: View {
             .foregroundStyle(Palette.secondaryInk)
 
             Panel {
+                AgentChart(samples: samples, selected: selected, selectedTime: selectedTime, range: range, now: now,
+                           expanded: expanded, t3: model.t3.summary, t3Problem: model.t3.problem,
+                           select: { selectedTime = $0 })
+                    .equatable()
                 ForEach(ActivityMetric.allCases) { metric in
                     MetricChart(metric: metric, samples: samples, selected: selected, selectedTime: selectedTime,
                                 range: range, now: now, expanded: expanded, select: { selectedTime = $0 })
@@ -159,33 +163,8 @@ private struct MetricChart: View, Equatable {
                 }
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: expanded ? 5 : 3)) { axis in
-                AxisValueLabel(centered: false,
-                               anchor: axis.index == 0 ? .topLeading : axis.index == axis.count - 1 ? .topTrailing : .top,
-                               collisionResolution: .greedy) {
-                    if let date = axis.as(Date.self) {
-                        Text(date.formatted(range == .week ? .dateTime.month(.abbreviated).day() : .dateTime.hour().minute()))
-                            .font(.system(size: 9)).foregroundStyle(Palette.secondaryInk)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                }
-            }
-        }
-        .chartOverlay { proxy in
-            GeometryReader { geometry in
-                Color.clear.contentShape(Rectangle()).onContinuousHover { phase in
-                    switch phase {
-                    case .active(let location):
-                        if let frame = proxy.plotFrame {
-                            let plot = geometry[frame]
-                            if plot.contains(location) { select(proxy.value(atX: location.x - plot.minX)) }
-                        }
-                    case .ended: select(nil)
-                    }
-                }
-            }
-        }
+        .activityTimeAxis(range, expanded: expanded)
+        .activityHover(select)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(metric.rawValue + " history")
         .accessibilityValue(valueText(selected.flatMap(metric.value)))
@@ -205,6 +184,162 @@ private struct MetricChart: View, Equatable {
         case .battery: return "\(Int(value)) %"
         case .temperature: return String(format: "%.1f °C", value)
         case .thermal: return Thermal(rawValue: Int(value)).map(Format.thermal) ?? "Unknown"
+        }
+    }
+}
+
+/// Agent turns active each minute, stacked in one colour per agent. The legend names each agent and
+/// gives its count at the selected moment, so identity never rests on colour alone.
+private struct AgentChart: View, Equatable {
+    let samples: [ActivitySample]
+    let selected: ActivitySample?
+    let selectedTime: Date?
+    let range: ActivityRange
+    let now: Double
+    let expanded: Bool
+    let t3: String
+    let t3Problem: String?
+    let select: (Date?) -> Void
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.selected == b.selected && a.selectedTime == b.selectedTime && a.range == b.range && a.now == b.now
+            && a.expanded == b.expanded && a.t3 == b.t3 && a.t3Problem == b.t3Problem && a.samples == b.samples
+    }
+
+    private struct Segment: Identifiable {
+        var bar: AgentBar
+        var kind: AgentKind
+        var from: Int
+        var to: Int
+        var id: String { "\(bar.start)-\(kind.rawValue)" }
+    }
+
+    private func segments(_ bars: [AgentBar]) -> [Segment] {
+        bars.flatMap { bar in
+            var top = 0
+            return AgentKind.allCases.compactMap { kind -> Segment? in
+                let count = bar.counts[kind] ?? 0
+                guard count > 0 else { return nil }
+                defer { top += count }
+                return Segment(bar: bar, kind: kind, from: top, to: top + count)
+            }
+        }
+    }
+
+    var body: some View {
+        let bars = AgentBar.bars(samples, bucket: range.bucket)
+        let top = max(2, bars.map(\.total).max() ?? 0)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Active agents").font(.system(size: 12, weight: .medium))
+                Spacer()
+                Text(totalText).font(.system(size: 13, weight: .medium)).monospacedDigit()
+            }
+            HStack(spacing: 14) {
+                ForEach(AgentKind.allCases) { kind in
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2).fill(Palette.agent(kind)).frame(width: 8, height: 8)
+                        Text(kind.name + (selected?.agents.map { " \($0[kind.rawValue] ?? 0)" } ?? ""))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(Palette.secondaryInk)
+            chart(segments(bars), top: top).frame(height: expanded ? 110 : 70)
+            HStack {
+                Text("T3 Code")
+                Spacer()
+                Text(t3)
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(Palette.secondaryInk)
+            if let t3Problem {
+                Text(t3Problem).font(.system(size: 11)).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var totalText: String {
+        guard let agents = selected?.agents else { return "Unavailable" }
+        let total = agents.values.reduce(0, +)
+        return total == 0 ? "None" : "\(total) active"
+    }
+
+    private func chart(_ segments: [Segment], top: Int) -> some View {
+        // One-minute bars are wide enough to keep a gap between them; longer ranges draw them touching.
+        // Stacked segments keep about two points between them, so neighbouring colours stay apart.
+        let inset = range == .hour ? 0.12 : 0
+        let gap = Double(top) / (expanded ? 110 : 70)
+        return Chart {
+            ForEach(segments) { s in
+                let width = s.bar.end - s.bar.start
+                RectangleMark(xStart: .value("Start", Date(timeIntervalSince1970: s.bar.start + width * inset)),
+                              xEnd: .value("End", Date(timeIntervalSince1970: s.bar.end - width * inset)),
+                              yStart: .value("From", Double(s.from) + (s.from > 0 ? gap : 0)),
+                              yEnd: .value("To", Double(s.to) - gap))
+                    .foregroundStyle(Palette.agent(s.kind))
+            }
+            if let selectedTime {
+                RuleMark(x: .value("Selected time", selectedTime))
+                    .foregroundStyle(Palette.secondaryInk.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            }
+        }
+        .chartXScale(domain: Date(timeIntervalSince1970: now - range.seconds)...Date(timeIntervalSince1970: now))
+        .chartYScale(domain: 0...Double(top))
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [0, Double(top)]) { axis in
+                AxisGridLine().foregroundStyle(Palette.line)
+                AxisValueLabel {
+                    if let value = axis.as(Double.self) {
+                        Text("\(Int(value))").font(.system(size: 9)).foregroundStyle(Palette.secondaryInk)
+                    }
+                }
+            }
+        }
+        .activityTimeAxis(range, expanded: expanded)
+        .activityHover(select)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Active agents history")
+        .accessibilityValue(AgentKind.allCases.map { "\($0.name) \(selected?.agents?[$0.rawValue] ?? 0)" }
+            .joined(separator: ", "))
+    }
+}
+
+private extension View {
+    /// Times under the graph: hours and minutes, or days for the week.
+    func activityTimeAxis(_ range: ActivityRange, expanded: Bool) -> some View {
+        chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: expanded ? 5 : 3)) { axis in
+                AxisValueLabel(centered: false,
+                               anchor: axis.index == 0 ? .topLeading : axis.index == axis.count - 1 ? .topTrailing : .top,
+                               collisionResolution: .greedy) {
+                    if let date = axis.as(Date.self) {
+                        Text(date.formatted(range == .week ? .dateTime.month(.abbreviated).day() : .dateTime.hour().minute()))
+                            .font(.system(size: 9)).foregroundStyle(Palette.secondaryInk)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Moving over a graph selects the moment under the pointer in every graph.
+    func activityHover(_ select: @escaping (Date?) -> Void) -> some View {
+        chartOverlay { proxy in
+            GeometryReader { geometry in
+                Color.clear.contentShape(Rectangle()).onContinuousHover { phase in
+                    switch phase {
+                    case .active(let location):
+                        if let frame = proxy.plotFrame {
+                            let plot = geometry[frame]
+                            if plot.contains(location) { select(proxy.value(atX: location.x - plot.minX)) }
+                        }
+                    case .ended: select(nil)
+                    }
+                }
+            }
         }
     }
 }

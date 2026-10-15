@@ -108,6 +108,32 @@ struct ActivityHistoryTests {
         #expect(ActivityMetric.battery.points(Array(week.prefix(60)), bucket: ActivityRange.hour.bucket).count == 60)
     }
 
+    @Test func agentBarsKeepEachStretchsMostActiveTurnsAndLeaveGaps() {
+        func agents(_ time: Double, _ counts: [String: Int]?) -> ActivitySample {
+            var s = sample(time)
+            s.agents = counts
+            return s
+        }
+        let samples = [agents(0, [:]), agents(60, ["claude": 2]), agents(120, ["claude": 1, "codex": 1]),
+                       agents(180, nil), agents(240, ["t3": 1])]
+        let minutes = AgentBar.bars(samples, bucket: ActivityRange.hour.bucket)
+        #expect(minutes.map(\.start) == [0, 60, 120, 240])
+        #expect(minutes.map(\.total) == [0, 2, 2, 1])
+        #expect(minutes.allSatisfy { $0.end - $0.start == 60 })
+        let wide = AgentBar.bars(samples, bucket: 300)
+        #expect(wide.count == 1)
+        #expect(wide[0].counts == [.claude: 2, .codex: 1, .t3: 1])
+    }
+
+    @Test func oldSamplesWithoutAgentCountsStillLoad() throws {
+        try withHistory { file in
+            try Data(#"[{"timestamp":1000,"batteryLevel":80,"thermal":0,"awake":false,"lidClosed":false}]"#.utf8)
+                .write(to: file)
+            let restored = try #require(ActivityHistory.load(at: file).first)
+            #expect(restored.agents == nil)
+        }
+    }
+
     @Test func timeRangesIncludeOnlyRealSamplesWithinTheRequestedWindow() {
         let samples = [sample(0), sample(3600), sample(7200)]
         #expect(ActivityRange.hour.samples(samples, now: 7200).map(\.timestamp) == [3600, 7200])

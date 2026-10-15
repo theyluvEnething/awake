@@ -93,7 +93,6 @@ struct SettingsView: View {
             Panel("Now") {
                 Row("Lid sleep", value: Format.lidSleep(s.flag))
                 Row("Display sleep", value: model.displayAwake ? "Off" : d.displayUnplugged ? "On while unplugged" : "On")
-                Row("T3 Code", value: model.t3.summary)
                 ForEach(d.holds, id: \.name) { hold in
                     Row(Format.hold(hold, now: s.inputs.now))
                 }
@@ -109,9 +108,6 @@ struct SettingsView: View {
                     Label(Format.capitalized(error), systemImage: "exclamationmark.triangle")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.orange)
-                }
-                if let problem = model.t3.problem {
-                    Text(problem).font(.system(size: 12)).foregroundStyle(.orange)
                 }
             }
 
@@ -205,6 +201,23 @@ enum Palette {
     static let line = Color(nsColor: dynamic(light: gray(0.937), dark: rgb(0.173, 0.173, 0.184)))
     static let ink = Color(nsColor: dynamic(light: .labelColor, dark: rgb(0.929, 0.933, 0.941)))
     static let secondaryInk = Color(nsColor: dynamic(light: .secondaryLabelColor, dark: rgb(0.604, 0.616, 0.643)))
+
+    /// The agents graph: orange, blue and aqua from a categorical palette checked for colour-blind
+    /// separation and contrast on these panels, each stepped for light and dark.
+    static func agent(_ kind: AgentKind) -> Color {
+        switch kind {
+        case .claude: claude
+        case .codex: codex
+        case .t3: t3
+        }
+    }
+    private static let claude = Color(nsColor: dynamic(light: hex(0xEB6834), dark: hex(0xD95926)))
+    private static let codex = Color(nsColor: dynamic(light: hex(0x2A78D6), dark: hex(0x3987E5)))
+    private static let t3 = Color(nsColor: dynamic(light: hex(0x1BAF7A), dark: hex(0x199E70)))
+
+    private static func hex(_ value: Int) -> NSColor {
+        rgb(Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255)
+    }
 
     private static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
         NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light }

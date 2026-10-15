@@ -9,6 +9,9 @@ struct ActivitySample: Codable, Equatable, Identifiable, Sendable {
     var awake: Bool
     var lidClosed: Bool
     var externalPower: Bool?
+    /// Agent turns active during the minute, by agent; zero counts are left out. Nil in samples
+    /// recorded before Awake counted them.
+    var agents: [String: Int]? = nil
 
     var id: Double { timestamp }
     var date: Date { Date(timeIntervalSince1970: timestamp) }
@@ -16,7 +19,49 @@ struct ActivitySample: Codable, Equatable, Identifiable, Sendable {
     static func take(_ snapshot: Snapshot, flag: Bool) -> ActivitySample {
         ActivitySample(timestamp: snapshot.inputs.now, batteryLevel: snapshot.inputs.battery?.level,
                        temperature: snapshot.inputs.battery?.temperature, thermal: snapshot.inputs.thermal.rawValue,
-                       awake: flag, lidClosed: snapshot.lidClosed, externalPower: snapshot.inputs.battery?.external)
+                       awake: flag, lidClosed: snapshot.lidClosed, externalPower: snapshot.inputs.battery?.external,
+                       agents: Policy.activeAgents(snapshot.inputs))
+    }
+}
+
+/// The agents Activity graphs, in the stacking and legend order.
+enum AgentKind: String, CaseIterable, Identifiable {
+    case claude, codex, t3
+    var id: Self { self }
+    var name: String {
+        switch self {
+        case .claude: "Claude"
+        case .codex: "Codex"
+        case .t3: "T3 Code"
+        }
+    }
+}
+
+/// One stretch of the agents graph: the most turns each agent had active within it.
+struct AgentBar: Identifiable, Equatable {
+    var start: Double
+    var end: Double
+    var counts: [AgentKind: Int]
+    var id: Double { start }
+    var total: Int { counts.values.reduce(0, +) }
+
+    /// One bar per `bucket` seconds, or per sample within a minute's range. Samples without agent
+    /// counts leave a gap, as the other graphs do.
+    static func bars(_ samples: [ActivitySample], bucket: Double) -> [AgentBar] {
+        let width = max(bucket, 60)
+        var bars: [AgentBar] = []
+        for sample in samples {
+            guard let agents = sample.agents else { continue }
+            let start = (sample.timestamp / width).rounded(.down) * width
+            var counts: [AgentKind: Int] = [:]
+            for kind in AgentKind.allCases { counts[kind] = agents[kind.rawValue] ?? 0 }
+            if let last = bars.last, last.start == start {
+                for kind in AgentKind.allCases { bars[bars.count - 1].counts[kind] = max(last.counts[kind] ?? 0, counts[kind] ?? 0) }
+            } else {
+                bars.append(AgentBar(start: start, end: start + width, counts: counts))
+            }
+        }
+        return bars
     }
 }
 

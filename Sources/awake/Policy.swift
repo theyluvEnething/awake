@@ -262,6 +262,22 @@ enum Policy {
         return d
     }
 
+    /// Agent turns running now or ended within the last minute, by agent ("claude", "codex", "t3"), in
+    /// any mode: the turns `decide` holds the Mac for in Awake mode. Activity records this once a
+    /// minute, so a turn shorter than a minute still shows.
+    static func activeAgents(_ i: Inputs) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for e in i.leases where e.kind == .agent {
+            let l = e.lease
+            let running = l.isRunning && e.pidAlive && l.lastSeen.map { i.now - $0 < expiry } == true
+            let finishing = !l.isRunning && l.endedAt.map { end in
+                i.now - end < grace && l.lastSeen.map { end - $0 < expiry } == true
+            } == true
+            if running || finishing { counts[l.agent ?? "agent", default: 0] += 1 }
+        }
+        return counts
+    }
+
     /// Whether `energyPlan` needs the current battery energy mode, which costs a pmset run.
     static func energyNeedsCurrent(wantLow: Bool, saved: Int?) -> Bool {
         wantLow ? saved == nil : saved != nil

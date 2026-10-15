@@ -168,6 +168,28 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
     }
 }
 
+@Suite struct ActiveAgents {
+    @Test func countsTurnsRunningOrEndedWithinTheLastMinuteInEveryMode() {
+        var codex = agent("c", lastSeen: now - 10)
+        codex.name = "codex-c"
+        codex.lease.agent = "codex"
+        let leases = [
+            agent("running", lastSeen: now - 30),
+            agent("finishing", lastSeen: now - 90, endedAt: now - 20),
+            agent("done", lastSeen: now - 400, endedAt: now - 200),
+            agent("crashed", lastSeen: now - 30, alive: false),
+            agent("stale", lastSeen: now - 16 * 60),
+            codex,
+        ]
+        for mode in [Mode.off, .auto, .on] {
+            #expect(Policy.activeAgents(inputs(mode, leases: leases)) == ["claude": 2, "codex": 1])
+        }
+        let auto = Policy.decide(inputs(.auto, leases: leases))
+        #expect(auto.holds.filter { if case .agent = $0.kind { true } else { false } }.count == 3)
+        #expect(Policy.activeAgents(inputs(.off)) == [:])
+    }
+}
+
 @Suite struct DisplayPolicyTests {
     @Test(arguments: [Mode.off, .auto, .on])
     func displayHoldIsIndependentOfTheLidMode(_ mode: Mode) {
