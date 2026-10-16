@@ -53,20 +53,19 @@ Keep display on is holding the display, in any mode.
 - **Settings…** groups wake controls, Activity and app maintenance.
   **Stay awake indefinitely** keeps it running until you turn it off, restart
   or log out. This control is disabled while Awake is off.
-- **Keep display on** in the cup menu and Settings prevents idle screen dimming and display sleep
-  while the Mac is plugged in, including while the lid mode is Off. On battery the display
-  sleeps as usual and the hold returns when you plug in again, unless **Even on battery**
-  in Settings is on. That option can only be changed while Keep display on is on, and it
-  stays as you set it. Closing the lid turns Keep display on off and disables
+- **Keep display on** in the cup menu and Settings keeps the screen on and unlocked indefinitely,
+  on battery too, including while the lid mode is Off. It prevents idle dimming, display sleep,
+  the screen saver, screen lock and idle system sleep until you turn it off, close the lid
+  or quit Awake. Closing the lid turns Keep display on off and disables
   the control. After reopening the lid, turn it on again when needed. Turning it
   off or quitting Awake also restores normal display sleep. The tooltip,
   `awake status` and the log show when it holds the display.
 
-Awake releases its holds at 20% battery unless charging, until the battery
+Awake releases its lid-closed holds at 20% battery unless charging, until the battery
 recovers above 25%. It also releases them at 40 °C battery temperature, until
 below 36 °C, and at high or critical thermal state. With the lid closed on
 battery it switches to Low Power and restores your energy mode afterwards.
-The display option follows the same battery and heat guards. It uses a temporary
+Keep display on continues through these guards; macOS can still force sleep at critical battery. It uses a temporary
 macOS assertion and does not change your display settings. Power changes are logged to
 `~/Library/Logs/awake.log`. macOS 27 no longer reports the battery temperature
 to apps, so Awake reads the hottest of the battery's SMC sensors instead.

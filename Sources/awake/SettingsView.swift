@@ -22,7 +22,6 @@ struct SettingsView: View {
     let setAwake: @MainActor @Sendable (Bool) -> Void
     let setIndefinitely: @MainActor @Sendable (Bool) -> Void
     let setKeepDisplayOn: @MainActor @Sendable (Bool) -> Void
-    let setKeepDisplayOnBattery: @MainActor @Sendable (Bool) -> Void
     let openActivity: @MainActor @Sendable () -> Void
     let uninstall: @MainActor @Sendable () -> Void
     @State private var page = Page.awake
@@ -81,18 +80,14 @@ struct SettingsView: View {
                 }
                 .disabled(d.mode == .off)
                 Toggle(isOn: Binding(get: { s.inputs.keepDisplayOn }, set: setKeepDisplayOn)) {
-                    Row("Keep display on", detail: "Prevent idle dimming and display sleep while plugged in, until you close the lid.")
+                    Row("Keep display on", detail: "Keep the screen on and unlocked, on battery too, until you turn this off, close the lid or quit Awake.")
                 }
                 .disabled(s.lidClosed)
-                Toggle(isOn: Binding(get: { s.inputs.displayOnBattery }, set: setKeepDisplayOnBattery)) {
-                    Row("Even on battery", detail: "Keep the display on while unplugged too.")
-                }
-                .disabled(!s.inputs.keepDisplayOn)
             }
 
             Panel("Now") {
                 Row("Lid sleep", value: Format.lidSleep(s.flag))
-                Row("Display sleep", value: model.displayAwake ? "Off" : d.displayUnplugged ? "On while unplugged" : "On")
+                Row("Display sleep", value: model.displayAwake ? "Off" : "On")
                 ForEach(d.holds, id: \.name) { hold in
                     Row(Format.hold(hold, now: s.inputs.now))
                 }

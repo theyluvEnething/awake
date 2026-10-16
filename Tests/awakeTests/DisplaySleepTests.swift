@@ -3,6 +3,29 @@ import Testing
 @testable import awake
 
 @Suite(.serialized) @MainActor struct DisplaySleepTests {
+    @Test func powerAndThermalChangesKeepTheSameUntimedAssertion() throws {
+        let display = DisplaySleep()
+        defer { display.end() }
+        var inputs = Inputs(now: 100, boot: "boot", mode: ModeState(mode: .off), leases: [],
+                            battery: nil, thermal: .nominal, guards: Guards(), releaseUntil: nil,
+                            keepDisplayOn: true)
+        display.update(Policy.decide(inputs).displayAwake)
+        let id = try #require(display.assertion)
+        for external in [true, false, true, false] {
+            for thermal in [Thermal.nominal, .serious, .critical] {
+                inputs.battery = Battery(level: 10, charging: false, external: external, temperature: 45)
+                inputs.thermal = thermal
+                display.update(Policy.decide(inputs).displayAwake)
+                #expect(display.assertion == id)
+                #expect(DisplaySleep.held(by: getpid()))
+            }
+        }
+        inputs.keepDisplayOn = false
+        display.update(Policy.decide(inputs).displayAwake)
+        #expect(!display.active)
+        #expect(IOPMAssertionCopyProperties(id) == nil)
+    }
+
     @Test func enablingTwiceKeepsOneUntimedDisplayAssertionAndDisablingReleasesIt() throws {
         let display = DisplaySleep()
         #expect(!display.active)

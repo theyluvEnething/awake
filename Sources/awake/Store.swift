@@ -17,7 +17,7 @@ struct Status: Codable, Equatable, Sendable {
     var loggedAt: Double? = nil
 }
 
-/// ~/Library/Application Support/awake: mode, display, display-battery, leases/, events/, saved energy mode, status,
+/// ~/Library/Application Support/awake: mode, display, leases/, events/, saved energy mode, status,
 /// release, lock.
 /// Every file is small JSON, written to a temporary file and renamed into place.
 enum Store {
@@ -50,9 +50,8 @@ enum Store {
     static func keepDisplayOn() -> Bool { read(Bool.self, "display") ?? false }
     static func setKeepDisplayOn(_ on: Bool) { write(on, "display") }
 
-    /// Even on battery. Unlike Keep display on, it survives quitting and closing the lid.
-    static func keepDisplayOnBattery() -> Bool { read(Bool.self, "display-battery") ?? false }
-    static func setKeepDisplayOnBattery(_ on: Bool) { write(on, "display-battery") }
+    /// Remove the retired setting once per menu launch; a missing file needs no migration marker.
+    static func removeRetiredDisplayPreference() { remove(dir.appending(path: "display-battery")) }
 
     static func status() -> Status? { read(Status.self, "status") }
     static func setStatus(_ status: Status) { write(status, "status") }

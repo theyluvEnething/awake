@@ -15,10 +15,9 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
                     battery: Battery? = Battery(level: 80, charging: false, external: false, temperature: 30),
                     thermal: Thermal = .nominal, guards: Guards = Guards(),
                     modeBoot: String = "boot-1", base: Mode? = nil, release: Double? = nil,
-                    keepDisplayOn: Bool = false, displayOnBattery: Bool = false) -> Inputs {
+                    keepDisplayOn: Bool = false) -> Inputs {
     Inputs(now: now, boot: "boot-1", mode: ModeState(mode: mode, base: base, boot: modeBoot), leases: leases,
-           battery: battery, thermal: thermal, guards: guards, releaseUntil: release, keepDisplayOn: keepDisplayOn,
-           displayOnBattery: displayOnBattery)
+           battery: battery, thermal: thermal, guards: guards, releaseUntil: release, keepDisplayOn: keepDisplayOn)
 }
 
 @Suite struct Sessions {
@@ -194,7 +193,7 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
     @Test(arguments: [Mode.off, .auto, .on])
     func displayHoldIsIndependentOfTheLidMode(_ mode: Mode) {
         let withoutDisplay = Policy.decide(inputs(mode))
-        let withDisplay = Policy.decide(inputs(mode, keepDisplayOn: true, displayOnBattery: true))
+        let withDisplay = Policy.decide(inputs(mode, keepDisplayOn: true))
         #expect(!withoutDisplay.displayAwake)
         #expect(withDisplay.displayAwake)
         #expect(withDisplay.awake == withoutDisplay.awake)
@@ -203,50 +202,48 @@ private func inputs(_ mode: Mode = .auto, leases: [LeaseEntry] = [],
 
     @Test(arguments: [
         (20, false, 30.0, Thermal.nominal, Guards(), true),
+        (10, false, 30.0, .nominal, Guards(), true),
         (25, false, 30.0, .nominal, Guards(battery: true), true),
         (26, false, 30.0, .nominal, Guards(battery: true), false),
         (10, true, 30.0, .nominal, Guards(battery: true), false),
         (80, false, 40.0, .nominal, Guards(), true),
+        (80, false, 45.0, .nominal, Guards(), true),
         (80, false, 36.0, .nominal, Guards(heat: true), true),
         (80, false, 35.0, .nominal, Guards(heat: true), false),
         (80, false, 30.0, .serious, Guards(), true),
         (80, false, 30.0, .critical, Guards(), true),
     ] as [(Int, Bool, Double, Thermal, Guards, Bool)])
-    func displayRespectsTheExistingGuards(level: Int, charging: Bool, temperature: Double,
+    func displayIgnoresTheLidModeGuards(level: Int, charging: Bool, temperature: Double,
                                           thermal: Thermal, guards: Guards, paused: Bool) {
         let battery = Battery(level: level, charging: charging, external: charging, temperature: temperature)
-        let d = Policy.decide(inputs(.off, battery: battery, thermal: thermal, guards: guards, keepDisplayOn: true,
-                                     displayOnBattery: true))
-        #expect(d.displayAwake == !paused)
-        #expect((d.pause != nil) == paused)
+        let d = Policy.decide(inputs(.off, battery: battery, thermal: thermal, guards: guards, keepDisplayOn: true))
+        #expect(d.displayAwake)
+        #expect(d.pause == nil)
         #expect(!d.awake, "the display option must not disable lid sleep")
+        let lidHold = Policy.decide(inputs(.on, battery: battery, thermal: thermal, guards: guards, keepDisplayOn: true))
+        #expect(lidHold.displayAwake)
+        #expect((lidHold.pause != nil) == paused)
+        #expect(lidHold.awake == !paused)
     }
 
     @Test func logoutAlsoReleasesTheDisplay() {
-        #expect(!Policy.decide(inputs(.off, release: now + 30, keepDisplayOn: true, displayOnBattery: true)).displayAwake)
-        #expect(Policy.decide(inputs(.off, release: now - 1, keepDisplayOn: true, displayOnBattery: true)).displayAwake)
+        #expect(!Policy.decide(inputs(.off, release: now + 30, keepDisplayOn: true)).displayAwake)
+        #expect(Policy.decide(inputs(.off, release: now - 1, keepDisplayOn: true)).displayAwake)
     }
 
-    @Test func onBatteryTheDisplaySleepsUnlessEvenOnBatteryIsOn() {
-        let unplugged = Battery(level: 80, charging: false, external: false, temperature: 30)
-        let pluggedIn = Battery(level: 80, charging: false, external: true, temperature: 30)
-        let charging = Battery(level: 50, charging: true, external: true, temperature: 30)
-        let held = Policy.decide(inputs(.off, battery: unplugged, keepDisplayOn: true))
-        #expect(!held.displayAwake)
-        #expect(held.displayUnplugged)
-        #expect(held.pause == nil)
-        #expect(Policy.decide(inputs(.off, battery: unplugged, keepDisplayOn: true, displayOnBattery: true)).displayAwake)
-        #expect(Policy.decide(inputs(.off, battery: pluggedIn, keepDisplayOn: true)).displayAwake)
-        #expect(Policy.decide(inputs(.off, battery: charging, keepDisplayOn: true)).displayAwake)
-        #expect(!Policy.decide(inputs(.off, battery: unplugged, displayOnBattery: true)).displayAwake)
-        #expect(!Policy.decide(inputs(.off, battery: unplugged)).displayUnplugged)
+    @Test func chargerChangesNeverInterruptTheDisplayHold() {
+        for external in [false, true, false, true, false] {
+            let battery = Battery(level: 80, charging: false, external: external, temperature: 30)
+            #expect(Policy.decide(inputs(.off, battery: battery, keepDisplayOn: true)).displayAwake)
+            #expect(!Policy.decide(inputs(.off, battery: battery)).displayAwake)
+        }
     }
 
-    @Test func onBatteryOnlyTheDisplayWaitsNotTheLidHolds() {
-        let unplugged = Battery(level: 80, charging: false, external: false, temperature: 30)
-        let d = Policy.decide(inputs(.auto, leases: [agent("a", lastSeen: now - 30)], battery: unplugged, keepDisplayOn: true))
+    @Test func onBatteryBothDisplayAndAgentHoldsRemainActive() {
+        let battery = Battery(level: 80, charging: false, external: false, temperature: 30)
+        let d = Policy.decide(inputs(.auto, leases: [agent("a", lastSeen: now - 30)], battery: battery, keepDisplayOn: true))
         #expect(d.awake)
-        #expect(!d.displayAwake)
+        #expect(d.displayAwake)
     }
 
     @Test func desktopsCanKeepTheDisplayOnWithoutABattery() {
