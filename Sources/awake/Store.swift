@@ -17,7 +17,7 @@ struct Status: Codable, Equatable, Sendable {
     var loggedAt: Double? = nil
 }
 
-/// ~/Library/Application Support/awake: mode, display, leases/, events/, saved energy mode, status,
+/// ~/Library/Application Support/awake: mode, display, hide-covered, leases/, events/, saved energy mode, status,
 /// release, lock.
 /// Every file is small JSON, written to a temporary file and renamed into place.
 enum Store {
@@ -49,6 +49,10 @@ enum Store {
     /// Independent of the lid mode. A missing preference leaves normal display sleep enabled.
     static func keepDisplayOn() -> Bool { read(Bool.self, "display") ?? false }
     static func setKeepDisplayOn(_ on: Bool) { write(on, "display") }
+
+    /// Hide covered agent apps (see `CoveredApps`): on unless turned off.
+    static func hideCoveredAgents() -> Bool { read(Bool.self, "hide-covered") ?? true }
+    static func setHideCoveredAgents(_ on: Bool) { write(on, "hide-covered") }
 
     /// Remove the retired setting once per menu launch; a missing file needs no migration marker.
     static func removeRetiredDisplayPreference() { remove(dir.appending(path: "display-battery")) }

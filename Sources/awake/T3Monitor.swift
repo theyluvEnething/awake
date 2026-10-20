@@ -14,7 +14,7 @@ enum T3Monitor {
         var pid: Int32
     }
 
-    struct State: Sendable {
+    struct State: Equatable, Sendable {
         var sessions: [Session] = []
         var serverRunning = false
         var problem: String? = nil

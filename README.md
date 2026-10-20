@@ -60,6 +60,13 @@ Keep display on is holding the display, in any mode.
   the control. After reopening the lid, turn it on again when needed. Turning it
   off or quitting Awake also restores normal display sleep. The tooltip,
   `awake status` and the log show when it holds the display.
+- **Hide covered agent apps** in Settings, on by default: Claude and T3 Code keep drawing while
+  other apps' windows cover theirs completely, which cost about a third of a CPU core on a
+  MacBook Pro. Awake checks every 30 seconds and hides such an app, as Cmd-H does, once all of
+  its windows have been fully covered for two checks in a row and it isn't the frontmost app.
+  Switching to it shows it again. Each hide is logged.
+
+Awake's own Settings and Activity windows stop refreshing while they are covered or minimized.
 
 Awake releases its lid-closed holds at 20% battery unless charging, until the battery
 recovers above 25%. It also releases them at 40 °C battery temperature, until

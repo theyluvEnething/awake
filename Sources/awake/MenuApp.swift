@@ -29,6 +29,9 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     private var wantsHistory: Bool { window != nil || activityWindow != nil }
     private struct Shown: Equatable { var mode: Mode, warning: Bool, display: Bool }
     private var shown: Shown?
+    /// Covered checks in a row per agent app; see `CoveredApps`.
+    private var coveredCounts: [pid_t: Int] = [:]
+    private var visibilityTimer: Timer?
     private var reconcilePending = false
     private var retryHelperPending = false
     private var uninstalling = false
@@ -76,6 +79,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             MainActor.assumeIsolated {
                 self?.refresh()
                 self?.reconcileInBackground()
+                self?.hideCoveredAgents()
             }
         }
         refreshTimer?.tolerance = 10
@@ -125,8 +129,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
     /// Every item has an icon, as in macOS's own menus: Settings and Quit use the
     /// symbols of the Apple and app menus.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        refresh()
-        let s = model.snapshot
+        let s = refresh()
         menu.removeAllItems()
 
         let header = NSMenuItem(title: "Awake", action: nil, keyEquivalent: "")
@@ -219,13 +222,55 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             let view = SettingsView(model: model, updates: updates, setAwake: { [weak self] in self?.setAwake($0) },
                                     setIndefinitely: { [weak self] in self?.setIndefinitely($0) },
                                     setKeepDisplayOn: { [weak self] in self?.setKeepDisplayOn($0) },
+                                    setHideCovered: { [weak self] in self?.setHideCovered($0) },
                                     openActivity: { [weak self] in self?.openActivity() },
                                     uninstall: { [weak self] in self?.uninstall() })
             window = makeWindow(view)
         }
-        refresh()
-        reconcileInBackground() // also loads the activity history the window shows
+        model.snapshot = refresh()
         present(window)
+        reconcileInBackground() // also loads the activity history the window shows
+    }
+
+    func setHideCovered(_ on: Bool) {
+        Store.setHideCoveredAgents(on)
+        model.hideCovered = on
+        coveredCounts = [:]
+    }
+
+    /// Hides Claude and T3 Code once they have been fully covered for two checks in a row; see `CoveredApps`.
+    private func hideCoveredAgents() {
+        guard model.hideCovered, !uninstalling else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let agents = NSWorkspace.shared.runningApplications.filter {
+            CoveredApps.bundles.contains($0.bundleIdentifier ?? "") && !$0.isHidden && $0.processIdentifier != front
+        }
+        let windows = agents.isEmpty ? [] : CoveredApps.windows()
+        let covered = Set(agents.map(\.processIdentifier).filter { CoveredApps.covered($0, in: windows) })
+        let step = CoveredApps.step(covered: covered, previous: coveredCounts)
+        coveredCounts = step.counts
+        // On macOS 27 hide() returns false although the app hides, so its result says nothing.
+        for app in agents where step.hide.contains(app.processIdentifier) {
+            _ = app.hide()
+            log("hid " + (app.localizedName ?? "an agent app") + ", covered by other windows")
+        }
+    }
+
+    /// Pauses window updates while no Awake window can be seen, and catches up when one can again.
+    /// Runs every 2 seconds while a window is open, for about 0.1 ms.
+    private func updateVisibility() {
+        let open = [window, activityWindow].compactMap { $0 }.filter { $0.isVisible && !$0.isMiniaturized }
+        if [window, activityWindow].allSatisfy({ $0 == nil }) {
+            visibilityTimer?.invalidate()
+            visibilityTimer = nil
+        }
+        let visible = !open.isEmpty && CoveredApps.anyVisible(Set(open.map(\.windowNumber)), in: CoveredApps.windows())
+        guard visible != model.visible else { return }
+        model.visible = visible
+        if visible {
+            model.snapshot = refresh()
+            reconcileInBackground()
+        }
     }
 
     /// The menu runs while another app is active, and macOS may turn down Awake's request to become
@@ -235,6 +280,14 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
+        // On top now; the check below corrects this once another window covers it.
+        model.visible = true
+        if visibilityTimer == nil {
+            visibilityTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateVisibility() }
+            }
+            visibilityTimer?.tolerance = 0.5
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -247,6 +300,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             setupModel = nil
             window = nil
         }
+        updateVisibility()
         // Without a window nothing shows the history; the next window loads it again.
         if !wantsHistory {
             model.samples = []
@@ -265,8 +319,9 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             activityWindow?.minSize = NSSize(width: 700, height: 640)
             activityWindow?.center()
         }
-        reconcileInBackground()
+        model.snapshot = refresh()
         present(activityWindow)
+        reconcileInBackground()
     }
 
     private func makeWindow<Content: View>(_ view: Content, title: String = "Awake", resizable: Bool = false) -> NSWindow {
@@ -479,9 +534,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
 
     // MARK: State
 
-    private func refresh() {
+    /// Updates the display hold, icon and tooltip, and the windows' model while one can be seen.
+    @discardableResult
+    private func refresh() -> Snapshot {
         let s = Snapshot.take()
-        model.snapshot = s
+        if model.visible { model.snapshot = s }
         updateDisplay(s)
         let warning = warning(s)
         // Setting the image redraws the system menu bar, so only on a change.
@@ -492,14 +549,16 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         }
         let tip = "Awake: " + (warning ?? summary(s))
         if item.button?.toolTip != tip { item.button?.toolTip = tip }
+        return s
     }
 
     private func updateDisplay(_ s: Snapshot) {
         if s.lidClosed && Store.keepDisplayOn() { Store.setKeepDisplayOn(false) }
         let was = display.active
         display.update(paths.atRequiredLocation && !uninstalling && s.decision.displayAwake)
-        model.displayAwake = display.active
-        model.displayError = display.error
+        // Every assignment redraws the windows, so only on a change.
+        if model.displayAwake != display.active { model.displayAwake = display.active }
+        if model.displayError != display.error { model.displayError = display.error }
         if display.active != was { logDisplay(s) }
     }
 
@@ -508,11 +567,11 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
         let d = s.decision
         let reason = s.lidClosed ? "lid closed" : !d.keepDisplayOn ? "Keep display on turned off"
             : d.released ? "logging out" : "Awake released it"
-        logDisplay((display.active ? "display sleep off  Keep display on" : "display sleep on   " + reason)
+        log((display.active ? "display sleep off  Keep display on" : "display sleep on   " + reason)
             + (s.inputs.battery.map { "  (" + Format.battery($0) + ")" } ?? ""))
     }
 
-    private func logDisplay(_ line: String) {
+    private func log(_ line: String) {
         // Off the main thread: the lock can be busy while a reconcile waits for the helper.
         Task.detached(priority: .utility) { _ = Store.withLock { Store.log(line) } }
     }
@@ -565,7 +624,8 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
             retryHelperPending = retryHelperPending || retryFailures
             return
         }
-        let historyStamp = self.historyStamp, wantsHistory = self.wantsHistory
+        // A covered window catches up in updateVisibility once it can be seen again.
+        let historyStamp = self.historyStamp, wantsHistory = self.wantsHistory && model.visible
         reconcileTask = Task { [weak self] in
             let result = await Task.detached(priority: .utility) {
                 let status: Status?
@@ -584,7 +644,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                 self.historyStamp = history.stamp
                 model.samples = history.samples
             }
-            if let t3 = result.2 { model.t3 = t3 }
+            if let t3 = result.2, t3 != model.t3 { model.t3 = t3 }
             refresh()
             if reconcilePending {
                 let retry = retryHelperPending
@@ -653,7 +713,7 @@ final class MenuApp: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDe
                         let held = app.display.active
                         Store.setKeepDisplayOn(false)
                         app.display.update(false)
-                        if held && !app.display.active { app.logDisplay("display sleep on   lid closed") }
+                        if held && !app.display.active { app.log("display sleep on   lid closed") }
                     }
                     app.refresh()
                     app.reconcileInBackground()

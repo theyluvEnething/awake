@@ -9,6 +9,10 @@ final class AwakeModel {
     var displayError: String?
     var samples: [ActivitySample] = []
     var t3 = T3Monitor.State()
+    var hideCovered = Store.hideCoveredAgents()
+    /// Whether any part of an Awake window can be seen. While none can, the windows stop refreshing:
+    /// a covered Settings window cost almost 1 % CPU redrawing every two seconds.
+    var visible = false
 
     init(snapshot: Snapshot) {
         self.snapshot = snapshot
@@ -22,6 +26,7 @@ struct SettingsView: View {
     let setAwake: @MainActor @Sendable (Bool) -> Void
     let setIndefinitely: @MainActor @Sendable (Bool) -> Void
     let setKeepDisplayOn: @MainActor @Sendable (Bool) -> Void
+    let setHideCovered: @MainActor @Sendable (Bool) -> Void
     let openActivity: @MainActor @Sendable () -> Void
     let uninstall: @MainActor @Sendable () -> Void
     @State private var page = Page.awake
@@ -62,7 +67,7 @@ struct SettingsView: View {
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
-                model.snapshot = Snapshot.take()
+                if model.visible { model.snapshot = Snapshot.take() }
             }
         }
     }
@@ -83,6 +88,9 @@ struct SettingsView: View {
                     Row("Keep display on", detail: "Keep the screen on and unlocked, on battery too, until you turn this off, close the lid or quit Awake.")
                 }
                 .disabled(s.lidClosed)
+                Toggle(isOn: Binding(get: { model.hideCovered }, set: setHideCovered)) {
+                    Row("Hide covered agent apps", detail: "Claude and T3 Code keep drawing behind other windows. Awake hides them after about a minute fully covered; switching to one shows it again.")
+                }
             }
 
             Panel("Now") {
