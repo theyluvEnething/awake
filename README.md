@@ -145,5 +145,5 @@ The update-signing key lives in Keychain under account `io.github.theyluvenethin
 `AWAKE_UPDATE_KEY_ACCOUNT` overrides the account. The script rejects a mismatched key.
 `./release.sh --skip-notarize` makes a clearly named check build without a cask.
 
-Awake was extracted from [toybox](https://github.com/theyluvEnething/toybox),
+Awake was extracted from [scripts](https://github.com/theyluvEnething/scripts) (then toybox),
 with its source history and MIT license preserved.
